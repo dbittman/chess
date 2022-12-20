@@ -1,10 +1,14 @@
 use std::fmt::Display;
 
 use colored::Colorize;
+use fen::{BoardState, FenError};
 
-use super::{bitboard::BitBoard, File, Piece, Rank, Side, Square, ALL_PIECES, NR_PIECE_TYPES};
+use super::{
+    bitboard::BitBoard, moves::Move, Direction, File, Piece, Rank, Side, Square, ALL_DIRS,
+    ALL_PIECES, NR_PIECE_TYPES,
+};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct CastleRights {
     val: u8,
 }
@@ -19,25 +23,218 @@ impl CastleRights {
     }
 
     pub fn remove_kingside(&mut self) {
-        self.val &= !(1 << 0);
+        self.val |= 1 << 0;
     }
 
     pub fn remove_queenside(&mut self) {
-        self.val &= !(1 << 1);
+        self.val |= 1 << 1;
+    }
+
+    fn from_boardstate(value: &BoardState) -> [Self; 2] {
+        let mut wcr = CastleRights::default();
+        let mut bcr = CastleRights::default();
+        if !value.black_can_oo {
+            bcr.remove_kingside();
+        }
+        if !value.black_can_ooo {
+            bcr.remove_queenside();
+        }
+        if !value.white_can_oo {
+            wcr.remove_kingside();
+        }
+        if !value.white_can_ooo {
+            wcr.remove_queenside();
+        }
+        [wcr, bcr]
     }
 }
 
-#[derive(Default)]
+#[allow(dead_code)]
+#[derive(Default, Clone)]
 pub struct Board {
     pieces: [BitBoard; NR_PIECE_TYPES],
     sides: [BitBoard; 2],
     castle_rights: [CastleRights; 2],
+    to_move: Side,
+    enpassant: BitBoard,
+    halfmove_clock: u64,
+    fullmoves: u64,
 }
 
 impl Board {
     #[allow(dead_code)]
     pub fn color_pieces(&self, side: Side) -> BitBoard {
         self.sides[side]
+    }
+
+    pub fn move_structural(&self, mv: &Move) -> bool {
+        self.piece(mv.start()).is_some()
+    }
+
+    unsafe fn apply_move_unchecked(mut self, mv: &Move) -> Self {
+        let (piece, side) = self.piece(mv.start()).unwrap();
+        if mv.is_castling(&self) {
+            let rank = mv.start().rank();
+            if mv.is_kingside_castle(&self) {
+                self.set_square(Square::from_rank_and_file(rank, File::F), Piece::Rook, side);
+                self.clear_square(Square::from_rank_and_file(rank, File::H));
+            } else {
+                self.set_square(Square::from_rank_and_file(rank, File::D), Piece::Rook, side);
+                self.clear_square(Square::from_rank_and_file(rank, File::A));
+            }
+        }
+        self.clear_square(mv.start());
+        self.set_square(mv.dest(), piece, side);
+        self
+    }
+
+    pub fn apply_move(self, mv: &Move) -> Result<Self, ()> {
+        if self.move_structural(&mv) {
+            Ok(unsafe { self.apply_move_unchecked(mv) })
+        } else {
+            Err(())
+        }
+    }
+
+    pub fn is_pinned_by_us(&self, sq: Square, us: Side) -> bool {
+        let mut without = self.clone();
+        without.clear_square(sq);
+        without.is_in_check(us.other()) && !self.is_in_check(us.other())
+    }
+
+    pub fn is_in_check(&self, side: Side) -> bool {
+        let king_sq = (self.pieces(Piece::King) & self.color_pieces(side)).to_square();
+        let a = self.is_attacked(king_sq, side, true);
+        /* *
+        println!(
+            "ks: {}{} {:?} => {}",
+            king_sq.file(),
+            king_sq.rank(),
+            side,
+            a
+        );
+        */
+        a
+    }
+
+    fn check_attacking_ray(
+        &self,
+        start: Square,
+        us: Side,
+        dir: Direction,
+        ignore_pins: bool,
+    ) -> bool {
+        let mut check = start;
+        while let Some(next) = check.next_sq(dir) {
+            //println!("check sq {}", next);
+            if let Some((piece, side)) = self.piece(next) {
+                if side != us {
+                    if dir.is_diag() {
+                        if ignore_pins || !self.is_pinned_by_us(next, us) {
+                            return piece == Piece::Bishop
+                                || piece == Piece::Queen
+                                || (next.is_kingmove_away(check) && piece == Piece::King);
+                        }
+                    } else {
+                        if ignore_pins || !self.is_pinned_by_us(next, us) {
+                            return piece == Piece::Rook
+                                || piece == Piece::Queen
+                                || (next.is_kingmove_away(check) && piece == Piece::King);
+                        }
+                    }
+                }
+                return false;
+            }
+            check = next;
+        }
+        false
+    }
+
+    pub fn is_attacked(&self, sq: Square, us: Side, ignore_pins: bool) -> bool {
+        for dir in ALL_DIRS {
+            //println!("checking {:?}", dir);
+            if self.check_attacking_ray(sq, us, dir, ignore_pins) {
+                return true;
+            }
+        }
+
+        for dir in ALL_DIRS {
+            if let Some(next) = sq.next_sq_knight(dir) {
+                if let Some((piece, side)) = self.piece(next) {
+                    if piece == Piece::Knight
+                        && side != us
+                        && (ignore_pins || !self.is_pinned_by_us(next, us))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    pub fn move_legal(&self, mv: &Move, side: Side) -> bool {
+        match self.piece(mv.start()) {
+            Some((_, s)) => {
+                if s != side {
+                    return false;
+                }
+            }
+            None => return false,
+        }
+        // check for checks
+        let applied = match self.clone().apply_move(mv) {
+            Ok(x) => x,
+            _ => return false,
+        };
+        if applied.is_in_check(side) {
+            return false;
+        }
+
+        /* *
+        println!(
+            "Applied {}: \n{} {} {:?}",
+            mv,
+            applied,
+            applied.is_in_check(side),
+            side
+        );
+        */
+
+        // check relevant squares for castling over and from check.
+        if mv.is_castling(self) {
+            let rank = match side {
+                Side::White => Rank::new(1),
+                Side::Black => Rank::new(8),
+            };
+            if mv.is_kingside_castle(self) {
+                if self.is_attacked(Square::from_rank_and_file(rank, File::E), side, false) {
+                    return false;
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::F), side, false) {
+                    return false;
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::G), side, false) {
+                    return false;
+                }
+            } else {
+                if self.is_attacked(Square::from_rank_and_file(rank, File::E), side, false) {
+                    return false;
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::D), side, false) {
+                    return false;
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::C), side, false) {
+                    return false;
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::B), side, false) {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 
     #[allow(dead_code)]
@@ -80,50 +277,44 @@ impl Board {
         self.sides[side].set(sq, true);
     }
 
-    pub fn from_fen(fen: &str) -> Result<Self, ()> {
-        let mut rank = Rank::LAST;
-        let mut file = File::A;
-        let mut board = Self::default();
-        for ch in fen.chars() {
-            let (piece, skip) = match ch {
-                _ if ch.is_ascii_digit() => (None, Some(ch.to_digit(10).unwrap() as usize)),
-                'r' => (Some((Side::Black, Piece::Rook)), None),
-                'n' => (Some((Side::Black, Piece::Knight)), None),
-                'b' => (Some((Side::Black, Piece::Bishop)), None),
-                'q' => (Some((Side::Black, Piece::Queen)), None),
-                'k' => (Some((Side::Black, Piece::King)), None),
-                'p' => (Some((Side::Black, Piece::Pawn)), None),
-                'R' => (Some((Side::White, Piece::Rook)), None),
-                'N' => (Some((Side::White, Piece::Knight)), None),
-                'B' => (Some((Side::White, Piece::Bishop)), None),
-                'Q' => (Some((Side::White, Piece::Queen)), None),
-                'K' => (Some((Side::White, Piece::King)), None),
-                'P' => (Some((Side::White, Piece::Pawn)), None),
-                '/' => (None, Some(0)),
-                _ => {
-                    return Err(());
-                }
-            };
-            let sq = Square::from_rank_and_file(rank, file);
-            if let Some((side, piece)) = piece {
-                board.set_square(sq, piece, side);
-            }
-            if let Some(skip) = skip {
-                if skip == 0 {
-                    file = File::A;
-                    rank = rank.prev().ok_or(())?;
-                } else {
-                    file = file.inc(skip + 1);
-                }
-            } else {
-                file = file.inc(1);
-            }
-        }
-        Ok(board)
+    pub fn from_fen(fen: &str) -> Result<Self, FenError> {
+        let bs = fen::BoardState::from_fen(fen)?;
+        let b = Board::from(bs);
+        return Ok(b);
     }
 
     pub fn castle_rights(&self, side: Side) -> &CastleRights {
         &self.castle_rights[side]
+    }
+
+    pub fn legal_moves(&self) -> impl Iterator<Item = Move> + '_ {
+        self.moves(self.to_move)
+            .filter(|m| self.move_legal(m, self.to_move))
+    }
+}
+
+impl From<BoardState> for Board {
+    fn from(value: BoardState) -> Self {
+        let mut b = Self {
+            castle_rights: CastleRights::from_boardstate(&value),
+            to_move: (&value.side_to_play).into(),
+            enpassant: value.en_passant_square.map_or(BitBoard::default(), |s| {
+                BitBoard::from_square(unsafe { Square::new(s) })
+            }),
+            halfmove_clock: value.halfmove_clock,
+            fullmoves: value.fullmove_number,
+            ..Default::default()
+        };
+        for (num, piece) in value.pieces.iter().enumerate() {
+            if let Some(piece) = piece {
+                b.set_square(
+                    unsafe { Square::new(num as u8) },
+                    (&piece.kind).into(),
+                    (&piece.color).into(),
+                )
+            }
+        }
+        b
     }
 }
 

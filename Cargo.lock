@@ -60,6 +60,7 @@ name = "chess"
 version = "0.1.0"
 dependencies = [
  "colored",
+ "fen",
  "vampirc-uci",
 ]
 
@@ -177,6 +178,12 @@ dependencies = [
  "block-buffer",
  "crypto-common",
 ]
+
+[[package]]
+name = "fen"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56cb092763bde57dca1a598309e8154840a549ef0e7ea300d0899740af5cb9c2"
 
 [[package]]
 name = "generic-array"

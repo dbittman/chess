@@ -9,6 +9,7 @@ edition = "2021"
 #bevy = { version = "0.9.1", features = ["dynamic"] }
 vampirc-uci = "0.11.1"
 colored = "2.0.0"
+fen = "0.1.0"
 
 [profile.dev]
 opt-level = 1

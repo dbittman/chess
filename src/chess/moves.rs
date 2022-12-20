@@ -1,25 +1,8 @@
-use std::borrow::Borrow;
+use std::fmt::Display;
+
+use vampirc_uci::UciMove;
 
 use super::{bitboard::BitBoard, board::Board, piecemoves, File, Piece, Rank, Side, Square};
-
-pub struct MoveIter<'a> {
-    board: &'a Board,
-    mask: BitBoard,
-}
-
-impl<'a> MoveIter<'a> {
-    pub fn mask(&mut self, mask: BitBoard) {
-        self.mask = mask;
-    }
-}
-
-impl<'a> Iterator for MoveIter<'a> {
-    type Item = Move;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}
 
 impl Board {
     fn check_castle_has_room(&self, side: Side, kingside: bool) -> bool {
@@ -135,5 +118,55 @@ impl Move {
 
     pub fn promo(&self) -> Option<Piece> {
         self.promo
+    }
+
+    pub fn is_castling(&self, board: &Board) -> bool {
+        match board.piece(self.start) {
+            Some((piece, _)) => {
+                if piece == Piece::King
+                    && self.start().file() == File::E
+                    && (self.dest().file() == File::G || self.dest().file() == File::B)
+                {
+                    true
+                } else {
+                    false
+                }
+            }
+            None => false,
+        }
+    }
+
+    pub fn is_kingside_castle(&self, board: &Board) -> bool {
+        self.is_castling(board) && self.dest().file() == File::G
+    }
+}
+
+impl Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{} => {}{} ({:?})",
+            self.start().file(),
+            self.start().rank(),
+            self.dest().file(),
+            self.dest().rank(),
+            self.promo()
+        )
+    }
+}
+
+impl From<UciMove> for Move {
+    fn from(value: UciMove) -> Self {
+        Self {
+            start: Square::from_rank_and_file(
+                value.from.rank.try_into().unwrap(),
+                value.from.file.try_into().unwrap(),
+            ),
+            dest: Square::from_rank_and_file(
+                value.to.rank.try_into().unwrap(),
+                value.to.file.try_into().unwrap(),
+            ),
+            promo: value.promotion.map(|p| p.into()),
+        }
     }
 }

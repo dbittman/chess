@@ -5,8 +5,11 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+use vampirc_uci::UciPiece;
+
 pub mod bitboard;
 pub mod board;
+pub mod engine;
 pub mod moves;
 pub mod piecemoves;
 
@@ -19,6 +22,19 @@ pub enum Piece {
     Rook,
     Queen,
     King,
+}
+
+impl From<UciPiece> for Piece {
+    fn from(value: UciPiece) -> Self {
+        match value {
+            UciPiece::Pawn => Self::Pawn,
+            UciPiece::Knight => Self::Knight,
+            UciPiece::Bishop => Self::Bishop,
+            UciPiece::Rook => Self::Rook,
+            UciPiece::Queen => Self::Queen,
+            UciPiece::King => Self::King,
+        }
+    }
 }
 
 pub const ALL_PIECES: [Piece; NR_PIECE_TYPES] = [
@@ -52,8 +68,9 @@ impl<T> IndexMut<Piece> for [T] {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Side {
+    #[default]
     White,
     Black,
 }
@@ -154,6 +171,24 @@ impl Rank {
     }
 }
 
+impl Display for Rank {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<u8> for Rank {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if value < 1 || value > 8 {
+            Err(())
+        } else {
+            Ok(Rank(value))
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -182,6 +217,25 @@ impl Display for File {
         }
     }
 }
+
+impl TryFrom<char> for File {
+    type Error = ();
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        Ok(match value {
+            'a' => Self::A,
+            'b' => Self::B,
+            'c' => Self::C,
+            'd' => Self::D,
+            'e' => Self::E,
+            'f' => Self::F,
+            'g' => Self::G,
+            'h' => Self::H,
+            _ => return Err(()),
+        })
+    }
+}
+
 impl Square {
     pub fn from_rank_and_file(rank: Rank, file: File) -> Self {
         Square((file as u8) + (rank.0 - 1) * 8)
@@ -203,6 +257,17 @@ impl Square {
 
     pub(super) unsafe fn new(v: u8) -> Self {
         Self(v)
+    }
+
+    pub fn is_kingmove_away(&self, other: Self) -> bool {
+        for dir in ALL_DIRS {
+            if let Some(x) = self.next_sq(dir) {
+                if x == other {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn next_sq_knight(self, dir: Direction) -> Option<Self> {
@@ -244,6 +309,12 @@ impl Square {
     }
 }
 
+impl Display for Square {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.file(), self.rank())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Direction {
     Up,
@@ -254,6 +325,18 @@ pub enum Direction {
     DownLeft,
     Left,
     UpLeft,
+}
+
+impl Direction {
+    pub fn is_diag(&self) -> bool {
+        match self {
+            Direction::Up => false,
+            Direction::Right => false,
+            Direction::Down => false,
+            Direction::Left => false,
+            _ => true,
+        }
+    }
 }
 
 pub const ALL_DIRS: [Direction; 8] = [
@@ -268,11 +351,6 @@ pub const ALL_DIRS: [Direction; 8] = [
 ];
 
 impl File {
-    pub fn inc(self, num: usize) -> Self {
-        let v: u8 = self as u8 + num as u8;
-        unsafe { transmute(v) }
-    }
-
     pub fn prev(self) -> Option<Self> {
         Some(match self {
             File::A => return None,
@@ -325,5 +403,27 @@ impl Step for File {
 
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
         u8::backward_checked(start as u8, count).map(|x| unsafe { transmute(x) })
+    }
+}
+
+impl From<&fen::Color> for Side {
+    fn from(value: &fen::Color) -> Self {
+        match value {
+            fen::Color::White => Side::White,
+            fen::Color::Black => Side::Black,
+        }
+    }
+}
+
+impl From<&fen::PieceKind> for Piece {
+    fn from(value: &fen::PieceKind) -> Self {
+        match value {
+            fen::PieceKind::Pawn => Self::Pawn,
+            fen::PieceKind::Knight => Self::Knight,
+            fen::PieceKind::Bishop => Self::Bishop,
+            fen::PieceKind::Rook => Self::Rook,
+            fen::PieceKind::Queen => Self::Queen,
+            fen::PieceKind::King => Self::King,
+        }
     }
 }
