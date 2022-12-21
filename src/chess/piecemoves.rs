@@ -148,6 +148,7 @@ fn build_pawn_moves(
     side: Side,
     attackable: BitBoard,
     enpassant: BitBoard,
+    ourside: BitBoard,
     bb: &mut BitBoard,
 ) {
     let rank = sq.rank();
@@ -155,13 +156,21 @@ fn build_pawn_moves(
         Side::White => Direction::Up,
         Side::Black => Direction::Down,
     };
-    if rank.allow_double_move(side) {
-        let next = sq.next_sq(dir).unwrap().next_sq(dir).unwrap();
-        bb.set(next, true);
-    }
 
     if let Some(next) = sq.next_sq(dir) {
-        bb.set(next, true);
+        if !(ourside.get(next) || attackable.get(next)) {
+            bb.set(next, true);
+        }
+    }
+
+    *bb &= !attackable;
+
+    if rank.allow_double_move(side) {
+        let first = sq.next_sq(dir).unwrap();
+        let next = first.next_sq(dir).unwrap();
+        if bb.get(first) {
+            bb.set(next, true);
+        }
     }
 
     *bb &= !attackable;
@@ -199,7 +208,7 @@ pub fn get_piece_moves(
 ) -> BitBoard {
     let mut bb = BitBoard::default();
     match piece {
-        Piece::Pawn => build_pawn_moves(sq, side, attackable, enpassant, &mut bb),
+        Piece::Pawn => build_pawn_moves(sq, side, attackable, enpassant, ourside, &mut bb),
         Piece::Bishop => build_diagonal_moves(sq, attackable, ourside, &mut bb),
         Piece::Knight => build_knight_moves(sq, &mut bb),
         Piece::Rook => build_lateral_moves(sq, attackable, ourside, &mut bb),

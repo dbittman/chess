@@ -1,4 +1,5 @@
 #![feature(step_trait)]
+#![feature(return_position_impl_trait_in_trait)]
 
 use std::{io::stdin, process::Command};
 
@@ -6,20 +7,23 @@ use chess::board::Board;
 use vampirc_uci::{parse_one, UciMessage};
 
 use crate::chess::{
-    bitboard::BitBoard, engine::Engine, piecemoves, File, Piece, Rank, Side, Square,
+    ab::alphabeta, bitboard::BitBoard, engine::Engine, piecemoves, File, Piece, Rank, Side, Square,
 };
 
 mod chess;
 fn main() {
     //let b = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").unwrap();
-    let b = Board::from_fen("r3k2r/p1pp1pb1/bn2Qnp1/2qPN3/1p2P3/2N5/PPPBBPPP/R3K2R b KQkq - 3 2")
-        .unwrap();
+    let b = Board::from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap();
 
     println!("{}", b);
-    println!("{}", b.is_in_check(Side::Black));
+    let mut x = 0;
     for m in b.legal_moves() {
-        println!("{}", m);
+        let test = b.clone().apply_move(&m).unwrap();
+        let (count, val) = alphabeta(&test, 2, f32::NEG_INFINITY, f32::INFINITY, true, true);
+        println!("{} {} {}", m, count, val);
+        x += count;
     }
+    println!("total count: {}", x);
 
     let o = BitBoard::from_square(Square::from_rank_and_file(Rank::new(4), File::E));
     let _m = piecemoves::get_piece_moves(
@@ -30,9 +34,10 @@ fn main() {
         o,
         BitBoard::default(),
     );
+    return;
     //println!("{}", m);
 
-    let cmd = Command::new("")
+    //let cmd = Command::new("")
 
     //   return;
     #[allow(unreachable_code)]

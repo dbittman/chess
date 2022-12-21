@@ -7,6 +7,7 @@ use std::{
 
 use vampirc_uci::UciPiece;
 
+pub mod ab;
 pub mod bitboard;
 pub mod board;
 pub mod engine;

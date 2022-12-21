@@ -71,6 +71,11 @@ impl Board {
         self.piece(mv.start()).is_some()
     }
 
+    fn adv_ply(&mut self) {
+        //TODO
+        self.to_move = self.to_move.other();
+    }
+
     unsafe fn apply_move_unchecked(mut self, mv: &Move) -> Self {
         let (piece, side) = self.piece(mv.start()).unwrap();
         if mv.is_castling(&self) {
@@ -83,8 +88,10 @@ impl Board {
                 self.clear_square(Square::from_rank_and_file(rank, File::A));
             }
         }
+        // TODO: remove castling rights
         self.clear_square(mv.start());
         self.set_square(mv.dest(), piece, side);
+        self.adv_ply();
         self
     }
 
@@ -133,13 +140,13 @@ impl Board {
                         if ignore_pins || !self.is_pinned_by_us(next, us) {
                             return piece == Piece::Bishop
                                 || piece == Piece::Queen
-                                || (next.is_kingmove_away(check) && piece == Piece::King);
+                                || (next.is_kingmove_away(start) && piece == Piece::King);
                         }
                     } else {
                         if ignore_pins || !self.is_pinned_by_us(next, us) {
                             return piece == Piece::Rook
                                 || piece == Piece::Queen
-                                || (next.is_kingmove_away(check) && piece == Piece::King);
+                                || (next.is_kingmove_away(start) && piece == Piece::King);
                         }
                     }
                 }
@@ -152,7 +159,7 @@ impl Board {
 
     pub fn is_attacked(&self, sq: Square, us: Side, ignore_pins: bool) -> bool {
         for dir in ALL_DIRS {
-            //println!("checking {:?}", dir);
+            // println!("checking {:?}", dir);
             if self.check_attacking_ray(sq, us, dir, ignore_pins) {
                 return true;
             }
@@ -188,11 +195,7 @@ impl Board {
             Ok(x) => x,
             _ => return false,
         };
-        if applied.is_in_check(side) {
-            return false;
-        }
-
-        /* *
+        /*
         println!(
             "Applied {}: \n{} {} {:?}",
             mv,
@@ -201,6 +204,9 @@ impl Board {
             side
         );
         */
+        if applied.is_in_check(side) {
+            return false;
+        }
 
         // check relevant squares for castling over and from check.
         if mv.is_castling(self) {
