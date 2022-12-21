@@ -13,6 +13,17 @@ pub struct CastleRights {
     val: u8,
 }
 
+impl Display for CastleRights {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            if self.kingside() { "k" } else { "" },
+            if self.queenside() { "q" } else { "" }
+        )
+    }
+}
+
 impl CastleRights {
     pub fn queenside(&self) -> bool {
         self.val & (1 << 1) == 0
@@ -78,6 +89,26 @@ impl Board {
 
     unsafe fn apply_move_unchecked(mut self, mv: &Move) -> Self {
         let (piece, side) = self.piece(mv.start()).unwrap();
+
+        let qr = match side {
+            Side::White => Square::from_rank_and_file(Rank::new(1), File::A),
+            Side::Black => Square::from_rank_and_file(Rank::new(8), File::A),
+        };
+        let kr = match side {
+            Side::White => Square::from_rank_and_file(Rank::new(1), File::H),
+            Side::Black => Square::from_rank_and_file(Rank::new(8), File::H),
+        };
+        if piece == Piece::Rook && mv.start() == qr {
+            self.castle_rights_mut(side).remove_queenside();
+        }
+        if piece == Piece::Rook && mv.start() == kr {
+            self.castle_rights_mut(side).remove_kingside();
+        }
+        if piece == Piece::King {
+            self.castle_rights_mut(side).remove_kingside();
+            self.castle_rights_mut(side).remove_queenside();
+        }
+
         if mv.is_castling(&self) {
             let rank = mv.start().rank();
             if mv.is_kingside_castle(&self) {
@@ -88,10 +119,36 @@ impl Board {
                 self.clear_square(Square::from_rank_and_file(rank, File::A));
             }
         }
-        // TODO: remove castling rights
+
+        if let Some(enpassant_sq) = self.enpassant().to_square() {
+            if enpassant_sq == mv.dest() && piece == Piece::Pawn {
+                let kill_rank = match side {
+                    Side::White => Rank::new(5),
+                    Side::Black => Rank::new(4),
+                };
+
+                let enpassant_target_sq = Square::from_rank_and_file(kill_rank, mv.dest().file());
+                self.clear_square(enpassant_target_sq);
+            }
+        }
+
         self.clear_square(mv.start());
         self.set_square(mv.dest(), piece, side);
         self.adv_ply();
+        self.enpassant = BitBoard::default();
+
+        if piece == Piece::Pawn
+            && mv.start().rank().allow_double_move(side)
+            && (mv.dest().rank() == Rank::new(5) || mv.dest().rank() == Rank::new(4))
+        {
+            let enpassant_rank = match side {
+                Side::White => Rank::new(3),
+                Side::Black => Rank::new(6),
+            };
+            let enpassant_sq = Square::from_rank_and_file(enpassant_rank, mv.start().file());
+            self.enpassant = BitBoard::from_square(enpassant_sq);
+        }
+
         self
     }
 
@@ -104,13 +161,31 @@ impl Board {
     }
 
     pub fn is_pinned_by_us(&self, sq: Square, us: Side) -> bool {
+        let their_king_sq = (self.pieces(Piece::King) & self.color_pieces(us.other()))
+            .to_square()
+            .expect(&format!(
+                "no king found on board for {:?}. Board state:\n{}",
+                us.other(),
+                self
+            ));
+
+        // you can't pin a king.
+        if their_king_sq == sq {
+            return false;
+        }
+
         let mut without = self.clone();
         without.clear_square(sq);
         without.is_in_check(us.other()) && !self.is_in_check(us.other())
     }
 
     pub fn is_in_check(&self, side: Side) -> bool {
-        let king_sq = (self.pieces(Piece::King) & self.color_pieces(side)).to_square();
+        let king_sq = (self.pieces(Piece::King) & self.color_pieces(side))
+            .to_square()
+            .expect(&format!(
+                "no king found on board for {:?}. Board state:\n{}",
+                side, self
+            ));
         let a = self.is_attacked(king_sq, side, true);
         /* *
         println!(
@@ -158,6 +233,7 @@ impl Board {
     }
 
     pub fn is_attacked(&self, sq: Square, us: Side, ignore_pins: bool) -> bool {
+        // check attacks from bishops, rooks, queens, and kings.
         for dir in ALL_DIRS {
             // println!("checking {:?}", dir);
             if self.check_attacking_ray(sq, us, dir, ignore_pins) {
@@ -165,12 +241,46 @@ impl Board {
             }
         }
 
+        // check attacks from knights
         for dir in ALL_DIRS {
             if let Some(next) = sq.next_sq_knight(dir) {
                 if let Some((piece, side)) = self.piece(next) {
                     if piece == Piece::Knight
                         && side != us
                         && (ignore_pins || !self.is_pinned_by_us(next, us))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        //check attacks from pawns
+        let pawn_attack_rank = match us {
+            Side::White => sq.rank().next(),
+            Side::Black => sq.rank().prev(),
+        };
+        let f1 = sq.file().prev();
+        let f2 = sq.file().next();
+
+        if let Some(rank) = pawn_attack_rank {
+            if let Some(f1) = f1 {
+                let source = Square::from_rank_and_file(rank, f1);
+                if let Some((piece, side)) = self.piece(source) {
+                    if piece == Piece::Pawn
+                        && side != us
+                        && (ignore_pins || !self.is_pinned_by_us(source, us))
+                    {
+                        return true;
+                    }
+                }
+            }
+            if let Some(f2) = f2 {
+                let source = Square::from_rank_and_file(rank, f2);
+                if let Some((piece, side)) = self.piece(source) {
+                    if piece == Piece::Pawn
+                        && side != us
+                        && (ignore_pins || !self.is_pinned_by_us(source, us))
                     {
                         return true;
                     }
@@ -208,6 +318,7 @@ impl Board {
             return false;
         }
 
+        //eprintln!("castle check ==> {} {}", mv, mv.is_castling(self));
         // check relevant squares for castling over and from check.
         if mv.is_castling(self) {
             let rank = match side {
@@ -232,9 +343,6 @@ impl Board {
                     return false;
                 }
                 if self.is_attacked(Square::from_rank_and_file(rank, File::C), side, false) {
-                    return false;
-                }
-                if self.is_attacked(Square::from_rank_and_file(rank, File::B), side, false) {
                     return false;
                 }
             }
@@ -293,9 +401,17 @@ impl Board {
         &self.castle_rights[side]
     }
 
+    pub fn castle_rights_mut(&mut self, side: Side) -> &mut CastleRights {
+        &mut self.castle_rights[side]
+    }
+
     pub fn legal_moves(&self) -> impl Iterator<Item = Move> + '_ {
         self.moves(self.to_move)
             .filter(|m| self.move_legal(m, self.to_move))
+    }
+
+    pub fn enpassant(&self) -> &BitBoard {
+        &self.enpassant
     }
 }
 
@@ -351,6 +467,15 @@ fn utf8_char(piece: Piece, side: Side) -> char {
 
 impl Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "kr: white={}, black={}{}",
+            self.castle_rights(Side::White),
+            self.castle_rights(Side::Black),
+            self.enpassant
+                .to_square()
+                .map_or("".to_owned(), |x| format!(" ; enpassant: {}", x))
+        )?;
         for rank in (Rank::FIRST..=Rank::LAST).rev() {
             for file in File::A..=File::H {
                 let sq = Square::from_rank_and_file(rank, file);

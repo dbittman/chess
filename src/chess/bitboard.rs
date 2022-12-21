@@ -39,8 +39,12 @@ impl BitBoard {
     }
 
     #[inline]
-    pub fn to_square(&self) -> Square {
-        unsafe { Square::new(self.0.trailing_zeros() as u8) }
+    pub fn to_square(&self) -> Option<Square> {
+        if self.0 == 0 {
+            None
+        } else {
+            Some(unsafe { Square::new(self.0.trailing_zeros() as u8) })
+        }
     }
 
     pub fn from_square(sq: Square) -> BitBoard {
@@ -101,7 +105,7 @@ impl Iterator for BitBoardIter {
         if self.board.0 == 0 {
             None
         } else {
-            let result = self.board.to_square();
+            let result = self.board.to_square().unwrap();
             self.board ^= BitBoard::from_square(result);
             Some(result)
         }

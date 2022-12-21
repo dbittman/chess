@@ -10,7 +10,8 @@ use crate::chess::{
     ab::alphabeta, bitboard::BitBoard, engine::Engine, piecemoves, File, Piece, Rank, Side, Square,
 };
 
-mod chess;
+pub mod chess;
+mod testing;
 fn main() {
     //let b = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").unwrap();
     let b = Board::from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap();

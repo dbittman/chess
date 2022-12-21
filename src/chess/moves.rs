@@ -41,7 +41,7 @@ impl Board {
     }
 
     pub fn castle_moves(&self, side: Side) -> Vec<Move> {
-        let king_sq = self.pieces(Piece::King).to_square();
+        let king_sq = self.pieces(Piece::King).to_square().unwrap();
         let mut v = vec![];
         let rank = king_sq.rank();
         if self.castle_rights(side).kingside() && self.check_castle_has_room(side, true) {
@@ -74,7 +74,7 @@ impl Board {
                 piece,
                 side,
                 sq,
-                BitBoard::default(),
+                self.enpassant().clone(),
                 self.color_pieces(side.other()),
                 self.color_pieces(side),
             );
@@ -125,7 +125,7 @@ impl Move {
             Some((piece, _)) => {
                 if piece == Piece::King
                     && self.start().file() == File::E
-                    && (self.dest().file() == File::G || self.dest().file() == File::B)
+                    && (self.dest().file() == File::G || self.dest().file() == File::C)
                 {
                     true
                 } else {
