@@ -8,7 +8,7 @@ impl Board {
     fn check_castle_has_room(&self, side: Side, kingside: bool) -> bool {
         let rank = match side {
             Side::White => Rank::new(1),
-            Side::Black => Rank::new(7),
+            Side::Black => Rank::new(8),
         };
         if kingside {
             if self
@@ -41,7 +41,9 @@ impl Board {
     }
 
     pub fn castle_moves(&self, side: Side) -> Vec<Move> {
-        let king_sq = self.pieces(Piece::King).to_square().unwrap();
+        let king_sq = (self.pieces(Piece::King) & self.color_pieces(side))
+            .to_square()
+            .unwrap();
         let mut v = vec![];
         let rank = king_sq.rank();
         if self.castle_rights(side).kingside() && self.check_castle_has_room(side, true) {

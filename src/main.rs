@@ -14,14 +14,17 @@ pub mod chess;
 mod testing;
 fn main() {
     //let b = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").unwrap();
-    let b = Board::from_fen("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8").unwrap();
+    let b =
+        Board::from_fen("r3k2r/p1p1qpb1/bn1ppnp1/1B1PN3/1p2P3/2N2Q1p/PPPB1PPP/R4K1R b kq - 1 1")
+            .unwrap();
 
     println!("{}", b);
     let mut x = 0;
     for m in b.legal_moves() {
         let test = b.clone().apply_move(&m).unwrap();
-        let (count, val) = alphabeta(&test, 2, f32::NEG_INFINITY, f32::INFINITY, true, true);
+        let (count, val) = alphabeta(&test, 0, f32::NEG_INFINITY, f32::INFINITY, true, true);
         println!("{} {} {}", m, count, val);
+        //println!("{}", test);
         x += count;
     }
     println!("total count: {}", x);
@@ -38,6 +41,9 @@ fn main() {
     return;
     //println!("{}", m);
 
+    //f2f3, f2f4, g2g4
+    // f2f3: e7e6, e7e5
+    //  e7e6: g2g4,
     //let cmd = Command::new("")
 
     //   return;
@@ -50,3 +56,6 @@ fn main() {
         eprintln!("{}", engine.board());
     }
 }
+
+// e5f7
+// c7c6

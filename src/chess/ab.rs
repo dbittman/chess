@@ -44,7 +44,7 @@ pub fn alphabeta<T: AlphaBeta>(
         };
     }
     if count == 0 {
-        return (1, node.score());
+        return (0, node.score());
     }
     return (count, value);
 }
@@ -61,5 +61,18 @@ impl AlphaBeta for Board {
     fn children(&self) -> impl Iterator<Item = Self> + '_ {
         self.legal_moves()
             .map(|m| self.clone().apply_move(&m).unwrap())
+    }
+}
+
+impl Board {
+    pub fn alphabeta(&self, depth: u64, max: bool, no_pruning: bool) -> (u64, f32) {
+        alphabeta(
+            self,
+            depth,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            max,
+            no_pruning,
+        )
     }
 }

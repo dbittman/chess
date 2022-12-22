@@ -88,6 +88,7 @@ impl Board {
     }
 
     unsafe fn apply_move_unchecked(mut self, mv: &Move) -> Self {
+        // TODO: remove castle rights if rook is captured?
         let (piece, side) = self.piece(mv.start()).unwrap();
 
         let qr = match side {
@@ -133,7 +134,11 @@ impl Board {
         }
 
         self.clear_square(mv.start());
-        self.set_square(mv.dest(), piece, side);
+        if let Some(promo) = mv.promo() {
+            self.set_square(mv.dest(), promo, side);
+        } else {
+            self.set_square(mv.dest(), piece, side);
+        }
         self.adv_ply();
         self.enpassant = BitBoard::default();
 
@@ -149,6 +154,9 @@ impl Board {
             self.enpassant = BitBoard::from_square(enpassant_sq);
         }
 
+        // TODO: remove for release
+        #[cfg(debug_assertions)]
+        self.assert_is_sane();
         self
     }
 
@@ -326,23 +334,39 @@ impl Board {
                 Side::Black => Rank::new(8),
             };
             if mv.is_kingside_castle(self) {
-                if self.is_attacked(Square::from_rank_and_file(rank, File::E), side, false) {
+                if !self.castle_rights(side).kingside() {
                     return false;
                 }
-                if self.is_attacked(Square::from_rank_and_file(rank, File::F), side, false) {
+                if let Some((r, s)) = self.piece(Square::from_rank_and_file(rank, File::H)) {
+                    if r != Piece::Rook || s != side {
+                        return false;
+                    }
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::E), side, true) {
                     return false;
                 }
-                if self.is_attacked(Square::from_rank_and_file(rank, File::G), side, false) {
+                if self.is_attacked(Square::from_rank_and_file(rank, File::F), side, true) {
+                    return false;
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::G), side, true) {
                     return false;
                 }
             } else {
-                if self.is_attacked(Square::from_rank_and_file(rank, File::E), side, false) {
+                if !self.castle_rights(side).queenside() {
                     return false;
                 }
-                if self.is_attacked(Square::from_rank_and_file(rank, File::D), side, false) {
+                if let Some((r, s)) = self.piece(Square::from_rank_and_file(rank, File::A)) {
+                    if r != Piece::Rook || s != side {
+                        return false;
+                    }
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::E), side, true) {
                     return false;
                 }
-                if self.is_attacked(Square::from_rank_and_file(rank, File::C), side, false) {
+                if self.is_attacked(Square::from_rank_and_file(rank, File::D), side, true) {
+                    return false;
+                }
+                if self.is_attacked(Square::from_rank_and_file(rank, File::C), side, true) {
                     return false;
                 }
             }
@@ -412,6 +436,29 @@ impl Board {
 
     pub fn enpassant(&self) -> &BitBoard {
         &self.enpassant
+    }
+
+    fn assert_piece_has_color(&self, piece: Piece) {
+        for p in self.pieces(piece).into_iter() {
+            assert!(self.sides[Side::White].get(p) || self.sides[Side::Black].get(p));
+        }
+    }
+
+    pub fn assert_is_sane(&self) {
+        for sq in self.sides[Side::White].into_iter() {
+            self.piece(sq).unwrap();
+        }
+
+        for sq in self.sides[Side::Black].into_iter() {
+            self.piece(sq).unwrap();
+        }
+
+        self.assert_piece_has_color(Piece::Bishop);
+        self.assert_piece_has_color(Piece::Rook);
+        self.assert_piece_has_color(Piece::Queen);
+        self.assert_piece_has_color(Piece::King);
+        self.assert_piece_has_color(Piece::Pawn);
+        self.assert_piece_has_color(Piece::Knight);
     }
 }
 
