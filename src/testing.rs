@@ -1,3 +1,4 @@
+use scoped_threadpool::Scope;
 use serde::Deserialize;
 
 use crate::chess::{ab::alphabeta, board::Board};
@@ -141,29 +142,32 @@ mod test {
         run_test(path);
     }
 
-    // #[test]
-    fn test_depth() {
-        test_with_epd("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 ;D1 20 ;D2 400 ;D3 8902 ;D4 197281 ;D5 4865609 ;D6 119060324", u32::MAX);
-    }
-
     #[test]
-    fn test_depth_many_up_to_4() {
+    fn test_depth_many_up_to_6() {
         let file = "testcases/depths.epd";
         let lines = BufReader::new(File::open(file).unwrap()).lines();
+        let mut tp = scoped_threadpool::Pool::new(
+            std::thread::available_parallelism()
+                .unwrap()
+                .try_into()
+                .map(|x: usize| (x * 20).try_into().unwrap())
+                .unwrap(),
+        );
 
-        for line in lines {
-            test_with_epd(&line.unwrap(), 4);
-        }
+        tp.scoped(|scope| {
+            for line in lines {
+                test_with_epd(scope, &line.unwrap(), 6);
+            }
+        });
     }
 }
 
-fn test_with_epd(epd: &str, max: u32) {
+fn test_with_epd(scope: &Scope, epd: &str, max: u32) {
     let mut splits = epd.split(";");
-    let fen = splits.nth(0).unwrap().trim();
+    let fen = splits.nth(0).unwrap().trim().to_owned();
 
-    eprintln!("initial position: {}", fen);
-    let board = Board::from_fen(fen).unwrap();
-
+    //eprintln!("initial position: {}", fen);
+    let board = Board::from_fen(&fen).unwrap();
     for check in splits {
         let label = check.split(" ").nth(0).unwrap().trim();
         if label.starts_with("D") {
@@ -180,18 +184,22 @@ fn test_with_epd(epd: &str, max: u32) {
                 break;
             }
 
-            let (count, _) = board.alphabeta(depth.into(), true, true);
-            eprintln!("depth {} expected {} got {}", depth, nodes, count);
-            if count != nodes {
-                eprintln!("fail, here is some info:");
-                eprintln!("{}", board);
-                for m in board.legal_moves() {
-                    let board = board.clone().apply_move(&m).unwrap();
-                    let (ncount, _) = board.alphabeta(1, true, true);
-                    eprintln!("{} count: {}", m, ncount);
+            let fen = fen.clone();
+            let board = board.clone();
+            scope.execute(move || {
+                let (count, _) = board.alphabeta(depth.into(), true, true);
+                eprintln!("{} depth {} expected {} got {}", fen, depth, nodes, count);
+                if false && count != nodes {
+                    eprintln!("fail, here is some info:");
+                    eprintln!("{}", board);
+                    for m in board.legal_moves() {
+                        let board = board.clone().apply_move(&m).unwrap();
+                        let (ncount, _) = board.alphabeta(1, true, true);
+                        eprintln!("{} count: {}", m, ncount);
+                    }
                 }
-            }
-            assert_eq!(count, nodes);
+                assert_eq!(count, nodes);
+            });
         }
     }
 }
