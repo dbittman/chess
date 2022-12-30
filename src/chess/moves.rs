@@ -3,6 +3,7 @@ use std::fmt::Display;
 use vampirc_uci::UciMove;
 
 use super::{
+    bitboard::BitBoard,
     board::Board,
     piece::Piece,
     piecemoves,
@@ -11,6 +12,11 @@ use super::{
 };
 
 impl Board {
+    #[inline]
+    pub fn move_structural(&self, mv: &Move) -> bool {
+        self.piece(mv.start()).is_some()
+    }
+
     fn check_castle_has_room(&self, side: Side, kingside: bool) -> bool {
         let rank = match side {
             Side::White => Rank::new(1),
@@ -91,6 +97,87 @@ impl Board {
                 }
             })
         })
+    }
+
+    unsafe fn apply_move_unchecked(mut self, mv: &Move) -> Self {
+        // TODO: remove castle rights if rook is captured?
+        let (piece, side) = self.piece(mv.start()).unwrap();
+
+        let qr = match side {
+            Side::White => Square::from_rank_and_file(Rank::new(1), File::A),
+            Side::Black => Square::from_rank_and_file(Rank::new(8), File::A),
+        };
+        let kr = match side {
+            Side::White => Square::from_rank_and_file(Rank::new(1), File::H),
+            Side::Black => Square::from_rank_and_file(Rank::new(8), File::H),
+        };
+        if piece == Piece::Rook && mv.start() == qr {
+            self.castle_rights_mut(side).remove_queenside();
+        }
+        if piece == Piece::Rook && mv.start() == kr {
+            self.castle_rights_mut(side).remove_kingside();
+        }
+        if piece == Piece::King {
+            self.castle_rights_mut(side).remove_kingside();
+            self.castle_rights_mut(side).remove_queenside();
+        }
+
+        if mv.is_castling(&self) {
+            let rank = mv.start().rank();
+            if mv.is_kingside_castle(&self) {
+                self.set_square(Square::from_rank_and_file(rank, File::F), Piece::Rook, side);
+                self.clear_square(Square::from_rank_and_file(rank, File::H));
+            } else {
+                self.set_square(Square::from_rank_and_file(rank, File::D), Piece::Rook, side);
+                self.clear_square(Square::from_rank_and_file(rank, File::A));
+            }
+        }
+
+        if let Some(enpassant_sq) = self.enpassant().to_square() {
+            if enpassant_sq == mv.dest() && piece == Piece::Pawn {
+                let kill_rank = match side {
+                    Side::White => Rank::new(5),
+                    Side::Black => Rank::new(4),
+                };
+
+                let enpassant_target_sq = Square::from_rank_and_file(kill_rank, mv.dest().file());
+                self.clear_square(enpassant_target_sq);
+            }
+        }
+
+        self.clear_square(mv.start());
+        if let Some(promo) = mv.promo() {
+            self.set_square(mv.dest(), promo, side);
+        } else {
+            self.set_square(mv.dest(), piece, side);
+        }
+        self.adv_ply();
+        self.set_enpassant(BitBoard::default());
+
+        if piece == Piece::Pawn
+            && mv.start().rank().allow_double_move(side)
+            && (mv.dest().rank() == Rank::new(5) || mv.dest().rank() == Rank::new(4))
+        {
+            let enpassant_rank = match side {
+                Side::White => Rank::new(3),
+                Side::Black => Rank::new(6),
+            };
+            let enpassant_sq = Square::from_rank_and_file(enpassant_rank, mv.start().file());
+            self.set_enpassant(BitBoard::from_square(enpassant_sq));
+        }
+
+        // TODO: remove for release
+        #[cfg(debug_assertions)]
+        self.assert_is_sane();
+        self
+    }
+
+    pub fn apply_move(self, mv: &Move) -> Result<Self, ()> {
+        if self.move_structural(mv) {
+            Ok(unsafe { self.apply_move_unchecked(mv) })
+        } else {
+            Err(())
+        }
     }
 }
 

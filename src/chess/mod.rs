@@ -3,6 +3,7 @@ pub mod board;
 pub mod square;
 //pub mod engine;
 pub mod direction;
+pub mod legal;
 pub mod moves;
 pub mod piece;
 pub mod piecemoves;

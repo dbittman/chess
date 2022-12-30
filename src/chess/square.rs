@@ -34,6 +34,7 @@ impl Rank {
     pub const FIRST: Self = Self(1);
     pub const LAST: Self = Self(8);
 
+    #[inline]
     pub fn prev(self) -> Option<Self> {
         if self.0 == 1 {
             None
@@ -42,6 +43,7 @@ impl Rank {
         }
     }
 
+    #[inline]
     pub fn next(self) -> Option<Self> {
         if self.0 == 8 {
             None
@@ -50,6 +52,7 @@ impl Rank {
         }
     }
 
+    #[inline]
     pub fn new(x: u8) -> Self {
         if !(1..=8).contains(&x) {
             panic!("bad rank {x}");
@@ -57,6 +60,7 @@ impl Rank {
         Self(x)
     }
 
+    #[inline]
     pub fn allow_double_move(&self, side: Side) -> bool {
         match side {
             Side::White => self.0 == 2,
@@ -64,6 +68,7 @@ impl Rank {
         }
     }
 
+    #[inline]
     pub fn is_promo_rank(&self, side: Side) -> bool {
         match side {
             Side::White => self.0 == 8,
@@ -138,28 +143,34 @@ impl TryFrom<char> for File {
 }
 
 impl Square {
+    #[inline]
     pub fn from_rank_and_file(rank: Rank, file: File) -> Self {
         Square((file as u8) + (rank.0 - 1) * 8)
     }
 
+    #[inline]
     pub fn rank(&self) -> Rank {
         Rank((self.0 / 8) + 1)
     }
 
+    #[inline]
     #[allow(dead_code)]
     pub fn file(&self) -> File {
         unsafe { transmute(self.0 % 8) }
     }
 
+    #[inline]
     pub fn is_dark(&self) -> bool {
         let r = self.rank().0 % 2;
         (self.0 + r) % 2 != 0
     }
 
+    #[inline]
     pub(super) unsafe fn new(v: u8) -> Self {
         Self(v)
     }
 
+    #[inline]
     pub fn is_kingmove_away(&self, other: Self) -> bool {
         for dir in ALL_DIRS {
             if let Some(x) = self.next_sq(dir) {
@@ -171,6 +182,7 @@ impl Square {
         false
     }
 
+    #[inline]
     pub fn next_sq_knight(self, dir: Direction) -> Option<Self> {
         let (rank, file) = (self.rank(), self.file());
         let next = match dir {
@@ -222,6 +234,7 @@ impl Display for Square {
 }
 
 impl File {
+    #[inline]
     pub fn prev(self) -> Option<Self> {
         Some(match self {
             File::A => return None,
@@ -235,6 +248,7 @@ impl File {
         })
     }
 
+    #[inline]
     pub fn next(self) -> Option<Self> {
         Some(match self {
             File::A => File::B,
@@ -250,28 +264,34 @@ impl File {
 }
 
 impl Step for Rank {
+    #[inline]
     fn steps_between(start: &Self, end: &Self) -> Option<usize> {
         u8::steps_between(&start.0, &end.0)
     }
 
+    #[inline]
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
         u8::forward_checked(start.0, count).map(Self)
     }
 
+    #[inline]
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
         u8::backward_checked(start.0, count).map(Self)
     }
 }
 
 impl Step for File {
+    #[inline]
     fn steps_between(start: &Self, end: &Self) -> Option<usize> {
         u8::steps_between(&(*start as u8), &(*end as u8))
     }
 
+    #[inline]
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
         u8::forward_checked(start as u8, count).map(|x| unsafe { transmute(x) })
     }
 
+    #[inline]
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
         u8::backward_checked(start as u8, count).map(|x| unsafe { transmute(x) })
     }

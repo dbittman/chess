@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub enum Direction {
     Up,
@@ -33,4 +32,3 @@ pub const ALL_DIRS: [Direction; 8] = [
     Direction::Left,
     Direction::UpLeft,
 ];
-
