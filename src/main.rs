@@ -1,5 +1,6 @@
 #![feature(step_trait)]
 #![feature(return_position_impl_trait_in_trait)]
+#![feature(test)]
 
 use std::{io::stdin, process::Command};
 
@@ -7,7 +8,10 @@ use chess::board::Board;
 use vampirc_uci::{parse_one, UciMessage};
 
 use crate::chess::{
-    ab::alphabeta, bitboard::BitBoard, engine::Engine, piecemoves, File, Piece, Rank, Side, Square,
+    ab::{alphabeta, SearchSettings},
+    bitboard::BitBoard,
+    engine::Engine,
+    piecemoves, File, Piece, Rank, Side, Square,
 };
 
 pub mod chess;
@@ -20,9 +24,14 @@ fn main() {
 
     println!("{}", b);
     let mut x = 0;
+    let settings = SearchSettings {
+        divide: true,
+        ab_prune: false,
+        depth: 1,
+    };
     for m in b.legal_moves() {
         let test = b.clone().apply_move(&m).unwrap();
-        let (count, val) = alphabeta(&test, 0, f32::NEG_INFINITY, f32::INFINITY, true, true);
+        let (count, val) = test.alphabeta(&settings, true);
         println!("{} {} {}", m, count, val);
         //println!("{}", test);
         x += count;

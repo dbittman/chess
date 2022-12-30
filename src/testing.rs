@@ -1,7 +1,10 @@
 use scoped_threadpool::Scope;
 use serde::Deserialize;
 
-use crate::chess::{ab::alphabeta, board::Board};
+use crate::chess::{
+    ab::{alphabeta, SearchSettings},
+    board::Board,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +85,7 @@ mod test {
         path::Path,
     };
 
-    use crate::chess::board::Board;
+    use crate::chess::{ab::SearchSettings, board::Board};
 
     use super::{test_with_epd, TestSuite};
 
@@ -142,10 +145,28 @@ mod test {
         run_test(path);
     }
 
+    extern crate test;
+    use test::Bencher;
+
+    #[allow(soft_unstable)]
+    #[bench]
+    fn bench_movegen(b: &mut Bencher) {
+        let settings = SearchSettings::divide(2);
+        let board =
+            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        b.iter(|| {
+            board.alphabeta(&settings, true);
+        });
+    }
+
+    const MAX_DEPTH: u32 = 3;
     #[test]
-    fn test_depth_many_up_to_6() {
+    fn test_depth_many_up_to() {
         let file = "testcases/depths.epd";
         let lines = BufReader::new(File::open(file).unwrap()).lines();
+
+        let file2 = "testcases/fischer.epd";
+        let lines2 = BufReader::new(File::open(file2).unwrap()).lines();
         let mut tp = scoped_threadpool::Pool::new(
             std::thread::available_parallelism()
                 .unwrap()
@@ -156,7 +177,7 @@ mod test {
 
         tp.scoped(|scope| {
             for line in lines {
-                test_with_epd(scope, &line.unwrap(), 6);
+                test_with_epd(scope, &line.unwrap(), MAX_DEPTH);
             }
         });
     }
@@ -187,14 +208,15 @@ fn test_with_epd(scope: &Scope, epd: &str, max: u32) {
             let fen = fen.clone();
             let board = board.clone();
             scope.execute(move || {
-                let (count, _) = board.alphabeta(depth.into(), true, true);
+                let settings = SearchSettings::divide(depth.into());
+                let (count, _) = board.alphabeta(&settings, true);
                 eprintln!("{} depth {} expected {} got {}", fen, depth, nodes, count);
                 if false && count != nodes {
                     eprintln!("fail, here is some info:");
                     eprintln!("{}", board);
                     for m in board.legal_moves() {
                         let board = board.clone().apply_move(&m).unwrap();
-                        let (ncount, _) = board.alphabeta(1, true, true);
+                        let (ncount, _) = board.alphabeta(&settings, true);
                         eprintln!("{} count: {}", m, ncount);
                     }
                 }
