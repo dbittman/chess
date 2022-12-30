@@ -11,32 +11,20 @@ impl Board {
             Side::Black => Rank::new(8),
         };
         if kingside {
-            if self
+            !(self
                 .piece(Square::from_rank_and_file(rank, File::F))
-                .is_some()
-                || self
+                .is_some() || self
                     .piece(Square::from_rank_and_file(rank, File::G))
-                    .is_some()
-            {
-                false
-            } else {
-                true
-            }
+                    .is_some())
         } else {
-            if self
+            !(self
                 .piece(Square::from_rank_and_file(rank, File::B))
                 .is_some()
                 || self
                     .piece(Square::from_rank_and_file(rank, File::C))
-                    .is_some()
-                || self
+                    .is_some() || self
                     .piece(Square::from_rank_and_file(rank, File::D))
-                    .is_some()
-            {
-                false
-            } else {
-                true
-            }
+                    .is_some())
         }
     }
 
@@ -76,7 +64,7 @@ impl Board {
                 piece,
                 side,
                 sq,
-                self.enpassant().clone(),
+                *self.enpassant(),
                 self.color_pieces(side.other()),
                 self.color_pieces(side),
             );
@@ -125,14 +113,8 @@ impl Move {
     pub fn is_castling(&self, board: &Board) -> bool {
         match board.piece(self.start) {
             Some((piece, _)) => {
-                if piece == Piece::King
-                    && self.start().file() == File::E
-                    && (self.dest().file() == File::G || self.dest().file() == File::C)
-                {
-                    true
-                } else {
-                    false
-                }
+                piece == Piece::King
+                    && self.start().file() == File::E && (self.dest().file() == File::G || self.dest().file() == File::C)
             }
             None => false,
         }

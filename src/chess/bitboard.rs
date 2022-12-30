@@ -50,9 +50,14 @@ impl BitBoard {
     pub fn from_square(sq: Square) -> BitBoard {
         BitBoard(1u64 << sq.0)
     }
+}
 
-    #[allow(dead_code)]
-    pub fn into_iter(self) -> BitBoardIter {
+impl IntoIterator for BitBoard {
+    type Item = Square;
+
+    type IntoIter = BitBoardIter;
+
+    fn into_iter(self) -> Self::IntoIter {
         BitBoardIter { board: self }
     }
 }
@@ -125,7 +130,7 @@ impl Display for BitBoard {
                 }
                 let p = self.get(sq);
                 if p {
-                    let s = format!(" xx ").black();
+                    let s = " xx ".to_string().black();
                     write!(
                         f,
                         "{}",
@@ -136,7 +141,7 @@ impl Display for BitBoard {
                         }
                     )?;
                 } else {
-                    let s = format!("    ");
+                    let s = "    ".to_string();
                     write!(
                         f,
                         "{}",
@@ -152,7 +157,7 @@ impl Display for BitBoard {
         writeln!(f)?;
         write!(f, "   ")?;
         for file in File::A..=File::H {
-            write!(f, "{}   ", file)?;
+            write!(f, "{file}   ")?;
         }
         writeln!(f)
     }

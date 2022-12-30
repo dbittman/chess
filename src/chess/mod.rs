@@ -49,9 +49,9 @@ pub const ALL_PIECES: [Piece; NR_PIECE_TYPES] = [
 
 pub const NR_PIECE_TYPES: usize = 6;
 
-impl Into<usize> for Piece {
-    fn into(self) -> usize {
-        self as usize
+impl From<Piece> for usize {
+    fn from(val: Piece) -> Self {
+        val as usize
     }
 }
 
@@ -85,9 +85,9 @@ impl Side {
     }
 }
 
-impl Into<usize> for Side {
-    fn into(self) -> usize {
-        self as usize
+impl From<Side> for usize {
+    fn from(val: Side) -> Self {
+        val as usize
     }
 }
 
@@ -122,11 +122,11 @@ impl Step for Square {
     }
 
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        u8::forward_checked(start.0, count).map(|x| Self(x))
+        u8::forward_checked(start.0, count).map(Self)
     }
 
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        u8::backward_checked(start.0, count).map(|x| Self(x))
+        u8::backward_checked(start.0, count).map(Self)
     }
 }
 
@@ -151,8 +151,8 @@ impl Rank {
     }
 
     pub fn new(x: u8) -> Self {
-        if x < 1 || x > 8 {
-            panic!("bad rank {}", x);
+        if !(1..=8).contains(&x) {
+            panic!("bad rank {x}");
         }
         Self(x)
     }
@@ -182,7 +182,7 @@ impl TryFrom<u8> for Rank {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value < 1 || value > 8 {
+        if !(1..=8).contains(&value) {
             Err(())
         } else {
             Ok(Rank(value))
@@ -274,14 +274,14 @@ impl Square {
     pub fn next_sq_knight(self, dir: Direction) -> Option<Self> {
         let (rank, file) = (self.rank(), self.file());
         let next = match dir {
-            Direction::Up => (rank.next().map(|x| x.next()).flatten(), file.next()),
-            Direction::UpRight => (rank.next(), file.next().map(|x| x.next()).flatten()),
-            Direction::Right => (rank.prev(), file.next().map(|x| x.next()).flatten()),
-            Direction::DownRight => (rank.prev().map(|x| x.prev()).flatten(), file.next()),
-            Direction::Down => (rank.prev().map(|x| x.prev()).flatten(), file.prev()),
-            Direction::DownLeft => (rank.prev(), file.prev().map(|x| x.prev()).flatten()),
-            Direction::Left => (rank.next(), file.prev().map(|x| x.prev()).flatten()),
-            Direction::UpLeft => (rank.next().map(|x| x.next()).flatten(), file.prev()),
+            Direction::Up => (rank.next().and_then(|x| x.next()), file.next()),
+            Direction::UpRight => (rank.next(), file.next().and_then(|x| x.next())),
+            Direction::Right => (rank.prev(), file.next().and_then(|x| x.next())),
+            Direction::DownRight => (rank.prev().and_then(|x| x.prev()), file.next()),
+            Direction::Down => (rank.prev().and_then(|x| x.prev()), file.prev()),
+            Direction::DownLeft => (rank.prev(), file.prev().and_then(|x| x.prev())),
+            Direction::Left => (rank.next(), file.prev().and_then(|x| x.prev())),
+            Direction::UpLeft => (rank.next().and_then(|x| x.next()), file.prev()),
         };
         if let (Some(rank), Some(file)) = next {
             Some(Square::from_rank_and_file(rank, file))
@@ -390,11 +390,11 @@ impl Step for Rank {
     }
 
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        u8::forward_checked(start.0, count).map(|x| Self(x))
+        u8::forward_checked(start.0, count).map(Self)
     }
 
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        u8::backward_checked(start.0, count).map(|x| Self(x))
+        u8::backward_checked(start.0, count).map(Self)
     }
 }
 

@@ -161,7 +161,7 @@ impl Board {
     }
 
     pub fn apply_move(self, mv: &Move) -> Result<Self, ()> {
-        if self.move_structural(&mv) {
+        if self.move_structural(mv) {
             Ok(unsafe { self.apply_move_unchecked(mv) })
         } else {
             Err(())
@@ -171,11 +171,9 @@ impl Board {
     pub fn is_pinned_by_us(&self, sq: Square, us: Side) -> bool {
         let their_king_sq = (self.pieces(Piece::King) & self.color_pieces(us.other()))
             .to_square()
-            .expect(&format!(
-                "no king found on board for {:?}. Board state:\n{}",
+            .unwrap_or_else(|| panic!("no king found on board for {:?}. Board state:\n{}",
                 us.other(),
-                self
-            ));
+                self));
 
         // you can't pin a king.
         if their_king_sq == sq {
@@ -191,7 +189,7 @@ impl Board {
         let king_sq = (self.pieces(Piece::King) & self.color_pieces(side))
             .to_square()
             .unwrap();
-        let a = self.is_attacked(king_sq, side, true);
+        
         /* *
         println!(
             "ks: {}{} {:?} => {}",
@@ -201,7 +199,7 @@ impl Board {
             a
         );
         */
-        a
+        self.is_attacked(king_sq, side, true)
     }
 
     fn check_attacking_ray(
@@ -222,12 +220,10 @@ impl Board {
                                 || piece == Piece::Queen
                                 || (next.is_kingmove_away(start) && piece == Piece::King);
                         }
-                    } else {
-                        if ignore_pins || !self.is_pinned_by_us(next, us) {
-                            return piece == Piece::Rook
-                                || piece == Piece::Queen
-                                || (next.is_kingmove_away(start) && piece == Piece::King);
-                        }
+                    } else if ignore_pins || !self.is_pinned_by_us(next, us) {
+                        return piece == Piece::Rook
+                            || piece == Piece::Queen
+                            || (next.is_kingmove_away(start) && piece == Piece::King);
                     }
                 }
                 return false;
@@ -378,12 +374,7 @@ impl Board {
     }
 
     pub fn check_piece(&self, sq: Square) -> Option<Piece> {
-        for p in ALL_PIECES {
-            if self.pieces[p].get(sq) {
-                return Some(p);
-            }
-        }
-        None
+        ALL_PIECES.into_iter().find(|&p| self.pieces[p].get(sq))
     }
 
     pub fn piece(&self, sq: Square) -> Option<(Piece, Side)> {
@@ -415,7 +406,7 @@ impl Board {
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
         let bs = fen::BoardState::from_fen(fen)?;
         let b = Board::from(bs);
-        return Ok(b);
+        Ok(b)
     }
 
     pub fn castle_rights(&self, side: Side) -> &CastleRights {
@@ -518,7 +509,7 @@ impl Display for Board {
             self.castle_rights(Side::Black),
             self.enpassant
                 .to_square()
-                .map_or("".to_owned(), |x| format!(" ; enpassant: {}", x))
+                .map_or("".to_owned(), |x| format!(" ; enpassant: {x}"))
         )?;
         for rank in (Rank::FIRST..=Rank::LAST).rev() {
             for file in File::A..=File::H {
@@ -542,7 +533,7 @@ impl Display for Board {
                         }
                     )?;
                 } else {
-                    let s = format!("    ");
+                    let s = "    ".to_string();
                     write!(
                         f,
                         "{}",
@@ -558,7 +549,7 @@ impl Display for Board {
         writeln!(f)?;
         write!(f, "   ")?;
         for file in File::A..=File::H {
-            write!(f, "{}   ", file)?;
+            write!(f, "{file}   ")?;
         }
         writeln!(f)
     }

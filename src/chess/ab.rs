@@ -70,7 +70,7 @@ pub fn alphabeta<T: AlphaBeta>(
     if count == 0 {
         return (0, node.score());
     }
-    return (count, value);
+    (count, value)
 }
 
 impl AlphaBeta for Board {
