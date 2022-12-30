@@ -221,14 +221,17 @@ impl Monitor {
         self.spawned.fetch_add(1, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn remaining(&self) -> usize {
         self.spawned.load(Ordering::SeqCst) - self.done.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)]
     pub fn completed(&self) -> usize {
         self.done.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)]
     pub fn finished(&self) -> bool {
         self.spawned.load(Ordering::SeqCst) == self.done.load(Ordering::SeqCst)
     }
