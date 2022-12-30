@@ -10,7 +10,7 @@ use vampirc_uci::UciPiece;
 pub mod ab;
 pub mod bitboard;
 pub mod board;
-pub mod engine;
+//pub mod engine;
 pub mod moves;
 pub mod piecemoves;
 
@@ -108,7 +108,7 @@ impl<T> IndexMut<Side> for [T] {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rank(u8);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Square(u8);
 
 #[allow(dead_code)]
@@ -290,23 +290,28 @@ impl Square {
         }
     }
 
+    #[inline]
     pub fn next_sq(self, dir: Direction) -> Option<Self> {
-        let (rank, file) = (self.rank(), self.file());
-        let next = match dir {
-            Direction::Up => (rank.next(), Some(file)),
-            Direction::UpRight => (rank.next(), file.next()),
-            Direction::Right => (Some(rank), file.next()),
-            Direction::DownRight => (rank.prev(), file.next()),
-            Direction::Down => (rank.prev(), Some(file)),
-            Direction::DownLeft => (rank.prev(), file.prev()),
-            Direction::Left => (Some(rank), file.prev()),
-            Direction::UpLeft => (rank.next(), file.prev()),
-        };
-        if let (Some(rank), Some(file)) = next {
-            Some(Square::from_rank_and_file(rank, file))
-        } else {
-            None
-        }
+        do_next_sq(self, dir)
+    }
+}
+
+pub fn do_next_sq(sq: Square, dir: Direction) -> Option<Square> {
+    let (rank, file) = (sq.rank(), sq.file());
+    let next = match dir {
+        Direction::Up => (rank.next(), Some(file)),
+        Direction::UpRight => (rank.next(), file.next()),
+        Direction::Right => (Some(rank), file.next()),
+        Direction::DownRight => (rank.prev(), file.next()),
+        Direction::Down => (rank.prev(), Some(file)),
+        Direction::DownLeft => (rank.prev(), file.prev()),
+        Direction::Left => (Some(rank), file.prev()),
+        Direction::UpLeft => (rank.next(), file.prev()),
+    };
+    if let (Some(rank), Some(file)) = next {
+        Some(Square::from_rank_and_file(rank, file))
+    } else {
+        None
     }
 }
 
@@ -316,7 +321,7 @@ impl Display for Square {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub enum Direction {
     Up,
     UpRight,

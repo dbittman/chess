@@ -1,11 +1,9 @@
 use scoped_threadpool::Scope;
 use serde::Deserialize;
 
-use crate::chess::{
-    ab::{alphabeta, SearchSettings},
-    board::Board,
-};
+use crate::chess::{ab::SearchSettings, board::Board};
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestSuite {
@@ -20,15 +18,18 @@ pub struct TestCase {
 }
 
 impl TestCase {
+    #[allow(dead_code)]
     pub fn start(&self) -> &TestPosition {
         &self.start
     }
 
+    #[allow(dead_code)]
     pub fn moves(&self) -> &[TestMove] {
         self.expected.as_ref()
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct TestPosition {
     description: String,
@@ -36,16 +37,19 @@ pub struct TestPosition {
 }
 
 impl TestPosition {
+    #[allow(dead_code)]
     pub fn fen(&self) -> &str {
         self.fen.as_ref()
     }
 
+    #[allow(dead_code)]
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct TestMove {
     #[serde(alias = "move")]
     mv: String,
@@ -53,24 +57,29 @@ pub struct TestMove {
 }
 
 impl TestMove {
+    #[allow(dead_code)]
     pub fn mv(&self) -> &str {
         self.mv.as_ref()
     }
 
+    #[allow(dead_code)]
     pub fn fen(&self) -> &str {
         self.fen.as_ref()
     }
 }
 
 impl TestSuite {
+    #[allow(dead_code)]
     pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
 
+    #[allow(dead_code)]
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
 
+    #[allow(dead_code)]
     pub fn test_cases(&self) -> &[TestCase] {
         self.test_cases.as_ref()
     }
@@ -81,8 +90,6 @@ mod test {
     use std::{
         fs::File,
         io::{BufRead, BufReader},
-        num,
-        path::Path,
     };
 
     use crate::chess::{ab::SearchSettings, board::Board};
@@ -151,7 +158,7 @@ mod test {
     #[allow(soft_unstable)]
     #[bench]
     fn bench_movegen(b: &mut Bencher) {
-        let settings = SearchSettings::divide(2);
+        let settings = SearchSettings::divide(3);
         let board =
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         b.iter(|| {
@@ -166,7 +173,7 @@ mod test {
         let lines = BufReader::new(File::open(file).unwrap()).lines();
 
         let file2 = "testcases/fischer.epd";
-        let lines2 = BufReader::new(File::open(file2).unwrap()).lines();
+        let _lines2 = BufReader::new(File::open(file2).unwrap()).lines();
         let mut tp = scoped_threadpool::Pool::new(
             std::thread::available_parallelism()
                 .unwrap()
@@ -183,6 +190,7 @@ mod test {
     }
 }
 
+#[allow(dead_code)]
 fn test_with_epd(scope: &Scope, epd: &str, max: u32) {
     let mut splits = epd.split(";");
     let fen = splits.nth(0).unwrap().trim().to_owned();

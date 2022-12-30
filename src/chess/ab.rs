@@ -1,9 +1,13 @@
-use super::board::Board;
+use super::{board::Board, moves::Move};
 
 pub trait AlphaBeta {
+    type ItemIterator<'a>: Iterator<Item = Self> + 'a
+    where
+        Self: 'a;
+
     fn is_terminal(&self) -> bool;
     fn score(&self) -> f32;
-    fn children(&self) -> impl Iterator<Item = Self> + '_;
+    fn children(&self) -> Self::ItemIterator<'_>;
 }
 
 pub struct SearchSettings {
@@ -78,10 +82,15 @@ impl AlphaBeta for Board {
         1.0
     }
 
-    fn children(&self) -> impl Iterator<Item = Self> + '_ {
-        self.legal_moves()
-            .map(|m| self.clone().apply_move(&m).unwrap())
+    fn children(&self) -> Self::ItemIterator<'_> {
+        self.legal_moves().map(|m| apply(self, m))
     }
+
+    type ItemIterator<'a> = impl Iterator<Item = Board> + 'a;
+}
+
+fn apply(b: &Board, m: Move) -> Board {
+    b.clone().apply_move(&m).unwrap()
 }
 
 impl Board {

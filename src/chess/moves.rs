@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use vampirc_uci::UciMove;
 
-use super::{bitboard::BitBoard, board::Board, piecemoves, File, Piece, Rank, Side, Square};
+use super::{board::Board, piecemoves, File, Piece, Rank, Side, Square};
 
 impl Board {
     fn check_castle_has_room(&self, side: Side, kingside: bool) -> bool {
