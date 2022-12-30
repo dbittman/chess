@@ -18,16 +18,16 @@ fn main() {
         Board::from_fen("r3k2r/p1p1qpb1/bn1ppnp1/1B1PN3/1p2P3/2N2Q1p/PPPB1PPP/R4K1R b kq - 1 1")
             .unwrap();
 
-    println!("{}", b);
+    //println!("{}", b);
     let mut x = 0;
     for m in b.legal_moves() {
         let test = b.clone().apply_move(&m).unwrap();
-        let (count, val) = alphabeta(&test, 0, f32::NEG_INFINITY, f32::INFINITY, true, true);
-        println!("{} {} {}", m, count, val);
+        let (count, val) = alphabeta(&test, 2, f32::NEG_INFINITY, f32::INFINITY, true, true);
+        //println!("{} {} {}", m, count, val);
         //println!("{}", test);
         x += count;
     }
-    println!("total count: {}", x);
+    //println!("total count: {}", x);
 
     let o = BitBoard::from_square(Square::from_rank_and_file(Rank::new(4), File::E));
     let _m = piecemoves::get_piece_moves(

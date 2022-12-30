@@ -190,10 +190,7 @@ impl Board {
     pub fn is_in_check(&self, side: Side) -> bool {
         let king_sq = (self.pieces(Piece::King) & self.color_pieces(side))
             .to_square()
-            .expect(&format!(
-                "no king found on board for {:?}. Board state:\n{}",
-                side, self
-            ));
+            .unwrap();
         let a = self.is_attacked(king_sq, side, true);
         /* *
         println!(
