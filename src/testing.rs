@@ -219,7 +219,7 @@ fn test_with_epd(scope: &Scope, epd: &str, max: u32) {
                 let settings = SearchSettings::divide(depth.into());
                 let (count, _) = board.alphabeta(&settings, true);
                 eprintln!("{} depth {} expected {} got {}", fen, depth, nodes, count);
-                if false && count != nodes {
+                if count != nodes {
                     eprintln!("fail, here is some info:");
                     eprintln!("{}", board);
                     for m in board.legal_moves() {
