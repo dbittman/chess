@@ -1,5 +1,3 @@
-use super::{board::Board, moves::Move};
-
 pub trait AlphaBeta {
     type ItemIterator<'a>: Iterator<Item = Self> + 'a
     where
@@ -71,37 +69,4 @@ pub fn alphabeta<T: AlphaBeta>(
         return (0, node.score());
     }
     (count, value)
-}
-
-impl AlphaBeta for Board {
-    fn is_terminal(&self) -> bool {
-        false
-    }
-
-    fn score(&self) -> f32 {
-        1.0
-    }
-
-    fn children(&self) -> Self::ItemIterator<'_> {
-        self.legal_moves().map(|m| apply(self, m))
-    }
-
-    type ItemIterator<'a> = impl Iterator<Item = Board> + 'a;
-}
-
-fn apply(b: &Board, m: Move) -> Board {
-    b.clone().apply_move(&m).unwrap()
-}
-
-impl Board {
-    pub fn alphabeta(&self, settings: &SearchSettings, max: bool) -> (u64, f32) {
-        alphabeta(
-            self,
-            settings,
-            settings.depth,
-            f32::NEG_INFINITY,
-            f32::INFINITY,
-            max,
-        )
-    }
 }

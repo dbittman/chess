@@ -6,7 +6,7 @@ use std::sync::{
 use scoped_threadpool::Scope;
 use serde::Deserialize;
 
-use crate::chess::{ab::SearchSettings, board::Board};
+use crate::{ab::SearchSettings, chess::board::Board};
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
@@ -99,7 +99,7 @@ mod test {
         time::Duration,
     };
 
-    use crate::chess::{ab::SearchSettings, board::Board};
+    use crate::{ab::SearchSettings, chess::board::Board};
 
     use super::{test_with_epd, Monitor, TestSuite};
 

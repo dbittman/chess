@@ -2,7 +2,13 @@ use std::fmt::Display;
 
 use vampirc_uci::UciMove;
 
-use super::{board::Board, piecemoves, File, Piece, Rank, Side, Square};
+use super::{
+    board::Board,
+    piece::Piece,
+    piecemoves,
+    side::Side,
+    square::{File, Rank, Square},
+};
 
 impl Board {
     fn check_castle_has_room(&self, side: Side, kingside: bool) -> bool {
@@ -13,7 +19,8 @@ impl Board {
         if kingside {
             !(self
                 .piece(Square::from_rank_and_file(rank, File::F))
-                .is_some() || self
+                .is_some()
+                || self
                     .piece(Square::from_rank_and_file(rank, File::G))
                     .is_some())
         } else {
@@ -22,7 +29,8 @@ impl Board {
                 .is_some()
                 || self
                     .piece(Square::from_rank_and_file(rank, File::C))
-                    .is_some() || self
+                    .is_some()
+                || self
                     .piece(Square::from_rank_and_file(rank, File::D))
                     .is_some())
         }
@@ -114,7 +122,8 @@ impl Move {
         match board.piece(self.start) {
             Some((piece, _)) => {
                 piece == Piece::King
-                    && self.start().file() == File::E && (self.dest().file() == File::G || self.dest().file() == File::C)
+                    && self.start().file() == File::E
+                    && (self.dest().file() == File::G || self.dest().file() == File::C)
             }
             None => false,
         }

@@ -1,4 +1,10 @@
-use super::{bitboard::BitBoard, Direction, Piece, Side, Square, ALL_DIRS};
+use super::{
+    bitboard::BitBoard,
+    direction::{Direction, ALL_DIRS},
+    piece::Piece,
+    side::Side,
+    square::Square,
+};
 
 fn build_diagonal_moves(sq: Square, attackable: BitBoard, ourside: BitBoard, bb: &mut BitBoard) {
     let mut cur = sq;

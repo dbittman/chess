@@ -4,8 +4,9 @@
 
 use chess::board::Board;
 
-use crate::chess::ab::SearchSettings;
+use crate::ab::SearchSettings;
 
+pub mod ab;
 pub mod chess;
 mod testing;
 fn main() {

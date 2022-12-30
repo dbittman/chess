@@ -3,9 +3,15 @@ use std::fmt::Display;
 use colored::Colorize;
 use fen::{BoardState, FenError};
 
+use crate::ab::{AlphaBeta, SearchSettings};
+
 use super::{
-    bitboard::BitBoard, moves::Move, Direction, File, Piece, Rank, Side, Square, ALL_DIRS,
-    ALL_PIECES, NR_PIECE_TYPES,
+    bitboard::BitBoard,
+    direction::{Direction, ALL_DIRS},
+    moves::Move,
+    piece::{Piece, ALL_PIECES, NR_PIECE_TYPES},
+    side::Side,
+    square::{File, Rank, Square},
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -171,9 +177,13 @@ impl Board {
     pub fn is_pinned_by_us(&self, sq: Square, us: Side) -> bool {
         let their_king_sq = (self.pieces(Piece::King) & self.color_pieces(us.other()))
             .to_square()
-            .unwrap_or_else(|| panic!("no king found on board for {:?}. Board state:\n{}",
-                us.other(),
-                self));
+            .unwrap_or_else(|| {
+                panic!(
+                    "no king found on board for {:?}. Board state:\n{}",
+                    us.other(),
+                    self
+                )
+            });
 
         // you can't pin a king.
         if their_king_sq == sq {
@@ -189,7 +199,7 @@ impl Board {
         let king_sq = (self.pieces(Piece::King) & self.color_pieces(side))
             .to_square()
             .unwrap();
-        
+
         /* *
         println!(
             "ks: {}{} {:?} => {}",
@@ -552,5 +562,38 @@ impl Display for Board {
             write!(f, "{file}   ")?;
         }
         writeln!(f)
+    }
+}
+
+impl AlphaBeta for Board {
+    fn is_terminal(&self) -> bool {
+        false
+    }
+
+    fn score(&self) -> f32 {
+        1.0
+    }
+
+    fn children(&self) -> Self::ItemIterator<'_> {
+        self.legal_moves().map(|m| apply(self, m))
+    }
+
+    type ItemIterator<'a> = impl Iterator<Item = Board> + 'a;
+}
+
+fn apply(b: &Board, m: Move) -> Board {
+    b.clone().apply_move(&m).unwrap()
+}
+
+impl Board {
+    pub fn alphabeta(&self, settings: &SearchSettings, max: bool) -> (u64, f32) {
+        crate::ab::alphabeta(
+            self,
+            settings,
+            settings.depth,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            max,
+        )
     }
 }

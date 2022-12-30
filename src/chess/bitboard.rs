@@ -5,7 +5,7 @@ use std::{
 
 use colored::Colorize;
 
-use super::{File, Rank, Square};
+use super::square::{File, Rank, Square};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BitBoard(u64);
