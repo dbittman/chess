@@ -1,3 +1,6 @@
+use std::mem::transmute;
+
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub enum Direction {
     Up,
@@ -20,6 +23,14 @@ impl Direction {
             _ => true,
         }
     }
+
+    pub const fn from_usize(value: usize) -> Self {
+        if value >= 8 {
+            panic!("");
+        } else {
+            unsafe { transmute(value as u8) }
+        }
+    }
 }
 
 pub const ALL_DIRS: [Direction; 8] = [
@@ -32,3 +43,9 @@ pub const ALL_DIRS: [Direction; 8] = [
     Direction::Left,
     Direction::UpLeft,
 ];
+
+impl Into<usize> for Direction {
+    fn into(self) -> usize {
+        unsafe { transmute::<Self, u8>(self) as usize }
+    }
+}

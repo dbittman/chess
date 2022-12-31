@@ -18,7 +18,7 @@ fn main() {
     let settings = SearchSettings {
         divide: true,
         ab_prune: false,
-        depth: 3,
+        depth: 4,
     };
     for m in b.legal_moves() {
         let test = b.clone().apply_move(&m).unwrap();

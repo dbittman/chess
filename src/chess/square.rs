@@ -1,5 +1,7 @@
 use std::{fmt::Display, iter::Step, mem::transmute};
 
+use memoize::lazy_static::lazy_static;
+
 use super::{
     direction::{Direction, ALL_DIRS},
     side::Side,
@@ -35,7 +37,7 @@ impl Rank {
     pub const LAST: Self = Self(8);
 
     #[inline]
-    pub fn prev(self) -> Option<Self> {
+    pub const fn prev(self) -> Option<Self> {
         if self.0 == 1 {
             None
         } else {
@@ -44,7 +46,7 @@ impl Rank {
     }
 
     #[inline]
-    pub fn next(self) -> Option<Self> {
+    pub const fn next(self) -> Option<Self> {
         if self.0 == 8 {
             None
         } else {
@@ -144,18 +146,18 @@ impl TryFrom<char> for File {
 
 impl Square {
     #[inline]
-    pub fn from_rank_and_file(rank: Rank, file: File) -> Self {
+    pub const fn from_rank_and_file(rank: Rank, file: File) -> Self {
         Square((file as u8) + (rank.0 - 1) * 8)
     }
 
     #[inline]
-    pub fn rank(&self) -> Rank {
+    pub const fn rank(&self) -> Rank {
         Rank((self.0 / 8) + 1)
     }
 
     #[inline]
     #[allow(dead_code)]
-    pub fn file(&self) -> File {
+    pub const fn file(&self) -> File {
         unsafe { transmute(self.0 % 8) }
     }
 
@@ -166,7 +168,7 @@ impl Square {
     }
 
     #[inline]
-    pub(super) unsafe fn new(v: u8) -> Self {
+    pub(super) const unsafe fn new(v: u8) -> Self {
         Self(v)
     }
 
@@ -184,31 +186,40 @@ impl Square {
 
     #[inline]
     pub fn next_sq_knight(self, dir: Direction) -> Option<Self> {
-        let (rank, file) = (self.rank(), self.file());
-        let next = match dir {
-            Direction::Up => (rank.next().and_then(|x| x.next()), file.next()),
-            Direction::UpRight => (rank.next(), file.next().and_then(|x| x.next())),
-            Direction::Right => (rank.prev(), file.next().and_then(|x| x.next())),
-            Direction::DownRight => (rank.prev().and_then(|x| x.prev()), file.next()),
-            Direction::Down => (rank.prev().and_then(|x| x.prev()), file.prev()),
-            Direction::DownLeft => (rank.prev(), file.prev().and_then(|x| x.prev())),
-            Direction::Left => (rank.next(), file.prev().and_then(|x| x.prev())),
-            Direction::UpLeft => (rank.next().and_then(|x| x.next()), file.prev()),
-        };
-        if let (Some(rank), Some(file)) = next {
-            Some(Square::from_rank_and_file(rank, file))
-        } else {
-            None
-        }
+        (&*NEXT_SQ_TABLE_KNIGHT)[self.0 as usize][<Direction as Into<usize>>::into(dir)]
     }
 
     #[inline]
     pub fn next_sq(self, dir: Direction) -> Option<Self> {
-        do_next_sq(self, dir)
+        (&*NEXT_SQ_TABLE)[self.0 as usize][<Direction as Into<usize>>::into(dir)]
     }
 }
 
-pub fn do_next_sq(sq: Square, dir: Direction) -> Option<Square> {
+fn build_dir_table(sq: usize) -> [Option<Square>; 8] {
+    let build_dir_table_entry = |d: usize| -> Option<Square> {
+        do_next_sq(unsafe { Square::new(sq as u8) }, Direction::from_usize(d))
+    };
+    array_const_fn_init::array_const_fn_init!(build_dir_table_entry; 8)
+}
+
+lazy_static! {
+    static ref NEXT_SQ_TABLE: [[Option<Square>; 8]; 64] =
+        array_const_fn_init::array_const_fn_init!(build_dir_table; 64);
+}
+
+fn build_dir_table_knight(sq: usize) -> [Option<Square>; 8] {
+    let build_dir_table_entry_k = |d: usize| -> Option<Square> {
+        do_next_sq_knight(unsafe { Square::new(sq as u8) }, Direction::from_usize(d))
+    };
+    array_const_fn_init::array_const_fn_init!(build_dir_table_entry_k; 8)
+}
+
+lazy_static! {
+    static ref NEXT_SQ_TABLE_KNIGHT: [[Option<Square>; 8]; 64] =
+        array_const_fn_init::array_const_fn_init!(build_dir_table_knight; 64);
+}
+
+pub const fn do_next_sq(sq: Square, dir: Direction) -> Option<Square> {
     let (rank, file) = (sq.rank(), sq.file());
     let next = match dir {
         Direction::Up => (rank.next(), Some(file)),
@@ -227,6 +238,25 @@ pub fn do_next_sq(sq: Square, dir: Direction) -> Option<Square> {
     }
 }
 
+pub fn do_next_sq_knight(sq: Square, dir: Direction) -> Option<Square> {
+    let (rank, file) = (sq.rank(), sq.file());
+    let next = match dir {
+        Direction::Up => (rank.next().and_then(|x| x.next()), file.next()),
+        Direction::UpRight => (rank.next(), file.next().and_then(|x| x.next())),
+        Direction::Right => (rank.prev(), file.next().and_then(|x| x.next())),
+        Direction::DownRight => (rank.prev().and_then(|x| x.prev()), file.next()),
+        Direction::Down => (rank.prev().and_then(|x| x.prev()), file.prev()),
+        Direction::DownLeft => (rank.prev(), file.prev().and_then(|x| x.prev())),
+        Direction::Left => (rank.next(), file.prev().and_then(|x| x.prev())),
+        Direction::UpLeft => (rank.next().and_then(|x| x.next()), file.prev()),
+    };
+    if let (Some(rank), Some(file)) = next {
+        Some(Square::from_rank_and_file(rank, file))
+    } else {
+        None
+    }
+}
+
 impl Display for Square {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.file(), self.rank())
@@ -235,7 +265,7 @@ impl Display for Square {
 
 impl File {
     #[inline]
-    pub fn prev(self) -> Option<Self> {
+    pub const fn prev(self) -> Option<Self> {
         Some(match self {
             File::A => return None,
             File::B => File::A,
@@ -249,7 +279,7 @@ impl File {
     }
 
     #[inline]
-    pub fn next(self) -> Option<Self> {
+    pub const fn next(self) -> Option<Self> {
         Some(match self {
             File::A => File::B,
             File::B => File::C,
