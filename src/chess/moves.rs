@@ -12,7 +12,6 @@ use super::{
 };
 
 impl Board {
-    #[inline]
     pub fn move_structural(&self, mv: &Move) -> bool {
         self.piece(mv.start()).is_some()
     }
@@ -102,6 +101,7 @@ impl Board {
     unsafe fn apply_move_unchecked(mut self, mv: &Move) -> Self {
         // TODO: remove castle rights if rook is captured?
         let (piece, side) = self.piece(mv.start()).unwrap();
+        let is_capture = self.piece(mv.dest()).is_some();
 
         let qr = match side {
             Side::White => Square::from_rank_and_file(Rank::new(1), File::A),
@@ -151,7 +151,8 @@ impl Board {
         } else {
             self.set_square(mv.dest(), piece, side);
         }
-        self.adv_ply();
+        let half = piece == Piece::Pawn || is_capture;
+        self.adv_ply(half);
         self.set_enpassant(BitBoard::default());
 
         if piece == Piece::Pawn

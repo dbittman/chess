@@ -17,18 +17,15 @@ pub const FULL: BitBoard = BitBoard(!0);
 
 impl BitBoard {
     #[allow(dead_code)]
-    #[inline]
     pub fn is_empty(&self) -> bool {
         self.0 == 0
     }
 
-    #[inline]
     #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.0 = 0
     }
 
-    #[inline]
     pub fn set(&mut self, sq: Square, set: bool) {
         if set {
             self.0 |= 1 << sq.0;
@@ -37,12 +34,10 @@ impl BitBoard {
         }
     }
 
-    #[inline]
     pub fn get(&self, sq: Square) -> bool {
         (self.0 & (1 << sq.0)) != 0
     }
 
-    #[inline]
     pub fn to_square(&self) -> Option<Square> {
         if self.0 == 0 {
             None
@@ -51,7 +46,6 @@ impl BitBoard {
         }
     }
 
-    #[inline]
     pub fn from_square(sq: Square) -> BitBoard {
         BitBoard(1u64 << sq.0)
     }
@@ -62,14 +56,12 @@ impl IntoIterator for BitBoard {
 
     type IntoIter = BitBoardIter;
 
-    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         BitBoardIter { board: self }
     }
 }
 
 impl From<Square> for BitBoard {
-    #[inline]
     fn from(value: Square) -> Self {
         Self(1 << value.0)
     }
@@ -78,7 +70,6 @@ impl From<Square> for BitBoard {
 impl BitAnd for BitBoard {
     type Output = Self;
 
-    #[inline]
     fn bitand(self, rhs: Self) -> Self::Output {
         Self(self.0 & rhs.0)
     }
@@ -87,21 +78,18 @@ impl BitAnd for BitBoard {
 impl Not for BitBoard {
     type Output = Self;
 
-    #[inline]
     fn not(self) -> Self::Output {
         Self(!self.0)
     }
 }
 
 impl BitAndAssign for BitBoard {
-    #[inline]
     fn bitand_assign(&mut self, other: BitBoard) {
         self.0 &= other.0;
     }
 }
 
 impl BitXorAssign for BitBoard {
-    #[inline]
     fn bitxor_assign(&mut self, other: BitBoard) {
         self.0 ^= other.0;
     }
@@ -114,7 +102,6 @@ pub struct BitBoardIter {
 impl Iterator for BitBoardIter {
     type Item = Square;
 
-    #[inline]
     fn next(&mut self) -> Option<Square> {
         if self.board.0 == 0 {
             None

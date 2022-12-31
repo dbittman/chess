@@ -38,7 +38,6 @@ pub const ALL_PIECES: [Piece; NR_PIECE_TYPES] = [
 pub const NR_PIECE_TYPES: usize = 6;
 
 impl From<Piece> for usize {
-    #[inline]
     fn from(val: Piece) -> Self {
         val as usize
     }
@@ -47,14 +46,12 @@ impl From<Piece> for usize {
 impl<T> Index<Piece> for [T] {
     type Output = T;
 
-    #[inline]
     fn index(&self, idx: Piece) -> &Self::Output {
         &self[idx as usize]
     }
 }
 
 impl<T> IndexMut<Piece> for [T] {
-    #[inline]
     fn index_mut(&mut self, idx: Piece) -> &mut Self::Output {
         &mut self[idx as usize]
     }

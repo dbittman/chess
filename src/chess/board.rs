@@ -30,22 +30,18 @@ impl Display for CastleRights {
 }
 
 impl CastleRights {
-    #[inline]
     pub fn queenside(&self) -> bool {
         self.val & (1 << 1) == 0
     }
 
-    #[inline]
     pub fn kingside(&self) -> bool {
         self.val & (1 << 0) == 0
     }
 
-    #[inline]
     pub fn remove_kingside(&mut self) {
         self.val |= 1 << 0;
     }
 
-    #[inline]
     pub fn remove_queenside(&mut self) {
         self.val |= 1 << 1;
     }
@@ -82,18 +78,22 @@ pub struct Board {
 }
 
 impl Board {
-    #[inline]
     #[allow(dead_code)]
     pub fn color_pieces(&self, side: Side) -> BitBoard {
         self.sides[side]
     }
 
-    pub fn adv_ply(&mut self) {
+    pub fn adv_ply(&mut self, half: bool) {
         //TODO
+        if self.to_move == Side::Black {
+            self.fullmoves += 1;
+        }
+        if half {
+            self.halfmove_clock += 1;
+        }
         self.to_move = self.to_move.other();
     }
 
-    #[inline]
     #[allow(dead_code)]
     pub fn pieces(&self, piece: Piece) -> BitBoard {
         self.pieces[piece]
@@ -135,17 +135,14 @@ impl Board {
         Ok(b)
     }
 
-    #[inline]
     pub fn castle_rights(&self, side: Side) -> &CastleRights {
         &self.castle_rights[side]
     }
 
-    #[inline]
     pub fn castle_rights_mut(&mut self, side: Side) -> &mut CastleRights {
         &mut self.castle_rights[side]
     }
 
-    #[inline]
     pub fn enpassant(&self) -> &BitBoard {
         &self.enpassant
     }
@@ -173,12 +170,10 @@ impl Board {
         self.assert_piece_has_color(Piece::Knight);
     }
 
-    #[inline]
     pub fn to_move(&self) -> Side {
         self.to_move
     }
 
-    #[inline]
     pub fn set_enpassant(&mut self, enpassant: BitBoard) {
         self.enpassant = enpassant;
     }

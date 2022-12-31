@@ -165,12 +165,14 @@ mod test {
     #[allow(soft_unstable)]
     #[bench]
     fn bench_movegen(b: &mut Bencher) {
-        let settings = SearchSettings::divide(3);
+        let settings = SearchSettings::divide(4);
         let board =
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         b.iter(|| {
-            board.alphabeta(&settings, true);
+            let (_, _) = board.alphabeta(&settings, true);
         });
+        let (c, _) = board.alphabeta(&settings, true);
+        eprintln!("total: {}", c);
     }
 
     const MAX_DEPTH: u32 = 5;
