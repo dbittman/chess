@@ -44,3 +44,12 @@ impl From<&fen::Color> for Side {
         }
     }
 }
+
+impl Side {
+    pub fn to_char(&self) -> char {
+        match self {
+            Side::White => 'w',
+            Side::Black => 'b',
+        }
+    }
+}

@@ -110,6 +110,7 @@ mod test {
         for case in suite.test_cases() {
             eprintln!("running test case {}", case.start().description());
             let b = Board::from_fen(case.start().fen()).unwrap();
+            assert_eq!(case.start().fen(), b.to_fen());
             eprintln!("starting pos {}:\n{}", case.start().fen(), b);
 
             let num_calc_moves = b.legal_moves().count();
@@ -246,6 +247,7 @@ fn test_with_epd(mon: &Arc<Monitor>, scope: &Scope, epd: &str, max: u32) {
 
     //eprintln!("initial position: {}", fen);
     let board = Board::from_fen(&fen).unwrap();
+    assert_eq!(fen, board.to_fen());
     for check in splits {
         let label = check.split(' ').next().unwrap().trim();
         if label.starts_with('D') {

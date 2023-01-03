@@ -2,6 +2,8 @@ use std::ops::{Index, IndexMut};
 
 use vampirc_uci::UciPiece;
 
+use super::side::Side;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Piece {
@@ -66,6 +68,24 @@ impl From<&fen::PieceKind> for Piece {
             fen::PieceKind::Rook => Self::Rook,
             fen::PieceKind::Queen => Self::Queen,
             fen::PieceKind::King => Self::King,
+        }
+    }
+}
+
+// Implement a function for Piece that emits a FEN character for the piece.
+impl Piece {
+    pub fn to_char(&self, side: Side) -> char {
+        let c = match self {
+            Piece::Pawn => 'P',
+            Piece::Knight => 'N',
+            Piece::Bishop => 'B',
+            Piece::Rook => 'R',
+            Piece::Queen => 'Q',
+            Piece::King => 'K',
+        };
+        match side {
+            Side::White => c,
+            Side::Black => c.to_ascii_lowercase(),
         }
     }
 }

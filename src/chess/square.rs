@@ -52,9 +52,9 @@ impl Rank {
         }
     }
 
-    pub fn new(x: u8) -> Self {
-        if !(1..=8).contains(&x) {
-            panic!("bad rank {x}");
+    pub const fn new(x: u8) -> Self {
+        if x < 1 || x > 8 {
+            panic!("bad rank");
         }
         Self(x)
     }
@@ -305,3 +305,24 @@ impl Step for File {
         u8::backward_checked(start as u8, count).map(|x| unsafe { transmute(x) })
     }
 }
+
+pub const ALL_RANKS: [Rank; 8] = [
+    Rank::new(1),
+    Rank::new(2),
+    Rank::new(3),
+    Rank::new(4),
+    Rank::new(5),
+    Rank::new(6),
+    Rank::new(7),
+    Rank::new(8),
+];
+pub const ALL_FILES: [File; 8] = [
+    File::A,
+    File::B,
+    File::C,
+    File::D,
+    File::E,
+    File::F,
+    File::G,
+    File::H,
+];

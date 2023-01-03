@@ -15,6 +15,7 @@ scoped_threadpool = "0.1.9"
 memoize = "0.3.3"
 array-const-fn-init = "0.1.1"
 static_init = "1.0.3"
+tokio = { version = "1.23.0", features = ["full"] }
 
 [profile.release]
 debug = true

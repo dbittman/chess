@@ -113,6 +113,16 @@ impl Iterator for BitBoardIter {
     }
 }
 
+impl BitBoard {
+    pub fn to_fen_string(&self) -> String {
+        let sq = self.to_square();
+        match sq {
+            Some(sq) => sq.to_string(),
+            None => "-".to_string(),
+        }
+    }
+}
+
 impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for rank in (Rank::FIRST..=Rank::LAST).rev() {

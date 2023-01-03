@@ -10,7 +10,7 @@ use super::{
     moves::Move,
     piece::{Piece, ALL_PIECES, NR_PIECE_TYPES},
     side::Side,
-    square::{File, Rank, Square},
+    square::{File, Rank, Square, ALL_FILES, ALL_RANKS},
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -44,6 +44,10 @@ impl CastleRights {
 
     pub fn remove_queenside(&mut self) {
         self.val |= 1 << 1;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.val == 3
     }
 
     fn from_boardstate(value: &BoardState) -> [Self; 2] {
@@ -130,9 +134,53 @@ impl Board {
     }
 
     pub fn from_fen(fen: &str) -> Result<Self, FenError> {
-        let bs = fen::BoardState::from_fen(fen)?;
+        let bs = fen::BoardState::from_fen(match fen {
+            "startpos" => "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            _ => fen,
+        })?;
         let b = Board::from(bs);
         Ok(b)
+    }
+
+    pub fn to_fen(&self) -> String {
+        let mut fen = String::new();
+        for rank in ALL_RANKS.into_iter().rev() {
+            let mut empty = 0;
+            for file in ALL_FILES {
+                let sq = Square::from_rank_and_file(rank, file);
+                if let Some((piece, side)) = self.piece(sq) {
+                    if empty > 0 {
+                        fen.push_str(&empty.to_string());
+                        empty = 0;
+                    }
+                    fen.push_str(&piece.to_char(side).to_string());
+                } else {
+                    empty += 1;
+                }
+            }
+            if empty > 0 {
+                fen.push_str(&empty.to_string());
+            }
+            if rank != Rank::new(1) {
+                fen.push('/');
+            }
+        }
+        fen.push(' ');
+        fen.push_str(&self.to_move.to_char().to_string());
+        fen.push(' ');
+        fen.push_str(&self.castle_rights[Side::White].to_string().to_uppercase());
+        fen.push_str(&self.castle_rights[Side::Black].to_string());
+        if self.castle_rights(Side::White).is_empty() && self.castle_rights(Side::Black).is_empty()
+        {
+            fen.push('-');
+        }
+        fen.push(' ');
+        fen.push_str(&self.enpassant.to_fen_string());
+        fen.push(' ');
+        fen.push_str(&self.halfmove_clock.to_string());
+        fen.push(' ');
+        fen.push_str(&self.fullmoves.to_string());
+        fen
     }
 
     pub fn castle_rights(&self, side: Side) -> &CastleRights {
@@ -314,5 +362,19 @@ impl Board {
             f32::INFINITY,
             max,
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    // write a test that ensures the to_fen function works correctly
+    use super::*;
+    #[test]
+    fn test_to_fen_start() {
+        let b = Board::from_fen("startpos").unwrap();
+        assert_eq!(
+            b.to_fen(),
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        );
     }
 }
