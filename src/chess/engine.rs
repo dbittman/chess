@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tokio::{
-    spawn,
+    select, spawn,
     sync::{
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         Mutex,
@@ -11,7 +11,11 @@ use vampirc_uci::{UciFen, UciMessage, UciMove};
 
 use super::board::Board;
 
-struct EngineResult {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct EngineResult {
+    best_move: Option<UciMove>,
+    ponder: Option<UciMove>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum EngineState {
@@ -21,9 +25,18 @@ enum EngineState {
     Stopped,
 }
 
+#[derive(Default, Clone, Copy)]
+enum EngineResultState {
+    #[default]
+    Calculating,
+    Ready(EngineResult),
+    Communicated(EngineResult),
+}
+
 #[derive(Default)]
 struct EngineInternals {
-    result: Option<EngineResult>,
+    result: EngineResultState,
+    intermediate: Option<EngineResult>,
     state: EngineState,
     board: Board,
     is_init: bool,
@@ -50,6 +63,7 @@ impl Default for Engine {
 
 impl EngineInternals {
     pub fn reset(&mut self) {
+        *self = Self::default();
         self.is_init = true;
     }
 
@@ -69,25 +83,96 @@ impl EngineInternals {
 }
 
 impl Engine {
+    async fn calculate(self: &Arc<Self>) -> EngineResult {
+        for mv in self.internals.lock().await.board.legal_moves() {
+            return EngineResult {
+                best_move: Some(mv.into()),
+                ponder: None,
+            };
+            /*let test = self
+            .internals
+            .lock()
+            .await
+            .board
+            .clone()
+            .apply_move(&mv)
+            .unwrap();
+            */
+            //let (_count, _val) = test.alphabeta(&self.settings, true);
+        }
+        todo!()
+    }
+
+    async fn maybe_send_bestmove(self: &Arc<Self>) {
+        let result = self.internals.lock().await.result;
+        if let EngineResultState::Ready(result) = result {
+            self.send_uci_message(UciMessage::BestMove {
+                best_move: result.best_move.unwrap(),
+                ponder: result.ponder,
+            });
+            if result.ponder.is_some() {
+                self.internals.lock().await.state = EngineState::Pondering;
+            } else {
+                self.internals.lock().await.state = EngineState::Stopped;
+            }
+            self.internals.lock().await.result = EngineResultState::Communicated(result);
+        } else {
+            self.internals.lock().await.state = EngineState::Stopped;
+        }
+    }
+
+    async fn handle_message(self: &Arc<Self>, msg: UciMessage) {
+        match msg {
+            UciMessage::Position {
+                startpos,
+                fen,
+                moves,
+            } => {
+                self.internals
+                    .lock()
+                    .await
+                    .set_position(startpos, fen, &moves);
+                self.internals.lock().await.state = EngineState::Stopped;
+            }
+            UciMessage::Go { .. } => {
+                self.internals.lock().await.state = EngineState::Going;
+                // TODO: put something, anything, into the engine result.
+            }
+            UciMessage::Stop => {
+                let result = self.internals.lock().await.result;
+                self.maybe_send_bestmove().await;
+            }
+            UciMessage::PonderHit => {
+                self.internals.lock().await.state = EngineState::Going;
+            }
+            UciMessage::UciNewGame => {
+                self.internals.lock().await.state = EngineState::Stopped;
+            }
+            _ => {}
+        }
+    }
+
     pub async fn main_task_engine(self: &Arc<Self>) {
         loop {
-            let msg = self.messages_recv.lock().await.recv().await.unwrap();
-            match msg {
-                UciMessage::Position {
-                    startpos,
-                    fen,
-                    moves,
-                } => {
-                    self.internals
-                        .lock()
-                        .await
-                        .set_position(startpos, fen, &moves);
+            let state = self.internals.lock().await.state;
+            if state != EngineState::Stopped {
+                let calc = self.calculate();
+                let mut messages_recv = self.messages_recv.lock().await;
+                let msg = messages_recv.recv();
+                select! {
+                    calc = calc => {
+                        self.internals.lock().await.result = EngineResultState::Ready(calc);
+                        self.maybe_send_bestmove().await;
+                        self.internals.lock().await.state = EngineState::Stopped;
+                    },
+                    msg = msg => {
+                        self.handle_message(msg.unwrap()).await;
+                    }
                 }
-                UciMessage::Go { .. } => {}
-                UciMessage::Stop => {}
-                UciMessage::PonderHit => {}
-                //UciMessage::UciNewGame => {}
-                _ => {}
+            } else {
+                let mut messages_recv = self.messages_recv.lock().await;
+                let msg = messages_recv.recv();
+                self.handle_message(msg.await.unwrap()).await;
             }
         }
     }

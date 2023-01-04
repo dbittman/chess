@@ -89,3 +89,16 @@ impl Piece {
         }
     }
 }
+
+impl From<Piece> for UciPiece {
+    fn from(value: Piece) -> Self {
+        match value {
+            Piece::Pawn => Self::Pawn,
+            Piece::Knight => Self::Knight,
+            Piece::Bishop => Self::Bishop,
+            Piece::Rook => Self::Rook,
+            Piece::Queen => Self::Queen,
+            Piece::King => Self::King,
+        }
+    }
+}

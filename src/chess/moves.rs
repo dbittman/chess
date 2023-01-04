@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use vampirc_uci::UciMove;
+use vampirc_uci::{UciMove, UciSquare};
 
 use super::{
     bitboard::BitBoard,
@@ -248,6 +248,22 @@ impl From<UciMove> for Move {
                 value.to.file.try_into().unwrap(),
             ),
             promo: value.promotion.map(|p| p.into()),
+        }
+    }
+}
+
+impl From<Move> for UciMove {
+    fn from(value: Move) -> Self {
+        Self {
+            from: UciSquare {
+                file: value.start().file().into(),
+                rank: value.start().rank().0,
+            },
+            to: UciSquare {
+                file: value.dest().file().into(),
+                rank: value.dest().rank().0,
+            },
+            promotion: value.promo().map(|p| p.into()),
         }
     }
 }

@@ -139,6 +139,21 @@ impl TryFrom<char> for File {
     }
 }
 
+impl From<File> for char {
+    fn from(f: File) -> Self {
+        match f {
+            File::A => 'a',
+            File::B => 'b',
+            File::C => 'c',
+            File::D => 'd',
+            File::E => 'e',
+            File::F => 'f',
+            File::G => 'g',
+            File::H => 'h',
+        }
+    }
+}
+
 impl Square {
     pub const fn from_rank_and_file(rank: Rank, file: File) -> Self {
         Square((file as u8) + (rank.0 - 1) * 8)
