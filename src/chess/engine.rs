@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use tokio::{
     select, spawn,
@@ -7,7 +7,7 @@ use tokio::{
         Mutex,
     },
 };
-use vampirc_uci::{UciFen, UciMessage, UciMove};
+use vampirc_uci::{UciFen, UciMessage, UciMove, UciSearchControl, UciTimeControl};
 
 use super::board::Board;
 
@@ -17,15 +17,44 @@ struct EngineResult {
     ponder: Option<UciMove>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Default)]
 enum EngineState {
-    Going,
-    Pondering,
+    Going(ThinkState),
+    Pondering(ThinkState),
     #[default]
     Stopped,
 }
 
-#[derive(Default, Clone, Copy)]
+impl EngineState {
+    /// Returns `true` if the engine state is [`Stopped`].
+    ///
+    /// [`Stopped`]: EngineState::Stopped
+    #[must_use]
+    fn is_stopped(&self) -> bool {
+        matches!(self, Self::Stopped)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ThinkState {
+    start_time: Instant,
+    time_control: Option<UciTimeControl>,
+    search_control: Option<UciSearchControl>,
+    best_result: EngineResultState,
+}
+
+impl ThinkState {
+    fn new(time_control: Option<UciTimeControl>, search_control: Option<UciSearchControl>) -> Self {
+        Self {
+            start_time: Instant::now(),
+            time_control,
+            search_control,
+            best_result: EngineResultState::Calculating,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 enum EngineResultState {
     #[default]
     Calculating,
@@ -35,8 +64,6 @@ enum EngineResultState {
 
 #[derive(Default)]
 struct EngineInternals {
-    result: EngineResultState,
-    intermediate: Option<EngineResult>,
     state: EngineState,
     board: Board,
     is_init: bool,
@@ -103,22 +130,11 @@ impl Engine {
         todo!()
     }
 
-    async fn maybe_send_bestmove(self: &Arc<Self>) {
-        let result = self.internals.lock().await.result;
-        if let EngineResultState::Ready(result) = result {
-            self.send_uci_message(UciMessage::BestMove {
-                best_move: result.best_move.unwrap(),
-                ponder: result.ponder,
-            });
-            if result.ponder.is_some() {
-                self.internals.lock().await.state = EngineState::Pondering;
-            } else {
-                self.internals.lock().await.state = EngineState::Stopped;
-            }
-            self.internals.lock().await.result = EngineResultState::Communicated(result);
-        } else {
-            self.internals.lock().await.state = EngineState::Stopped;
-        }
+    fn send_bestmove(self: &Arc<Self>, mv: EngineResult) {
+        self.send_uci_message(UciMessage::BestMove {
+            best_move: mv.best_move.unwrap(),
+            ponder: mv.ponder,
+        });
     }
 
     async fn handle_message(self: &Arc<Self>, msg: UciMessage) {
@@ -134,16 +150,29 @@ impl Engine {
                     .set_position(startpos, fen, &moves);
                 self.internals.lock().await.state = EngineState::Stopped;
             }
-            UciMessage::Go { .. } => {
-                self.internals.lock().await.state = EngineState::Going;
+            UciMessage::Go {
+                time_control,
+                search_control,
+            } => {
+                self.internals.lock().await.state =
+                    EngineState::Going(ThinkState::new(time_control, search_control));
                 // TODO: put something, anything, into the engine result.
             }
             UciMessage::Stop => {
-                let result = self.internals.lock().await.result;
-                self.maybe_send_bestmove().await;
+                let mut internal = self.internals.lock().await;
+                match &mut internal.state {
+                    EngineState::Going(state) => match state.best_result {
+                        EngineResultState::Ready(res) => {
+                            self.send_bestmove(res);
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+                internal.state = EngineState::Stopped;
             }
             UciMessage::PonderHit => {
-                self.internals.lock().await.state = EngineState::Going;
+                self.internals.lock().await.state = EngineState::Going(ThinkState::new(None, None));
             }
             UciMessage::UciNewGame => {
                 self.internals.lock().await.state = EngineState::Stopped;
@@ -152,18 +181,48 @@ impl Engine {
         }
     }
 
+    async fn record_bestmove(self: &Arc<Self>, result: EngineResult) {
+        let mut internal = self.internals.lock().await;
+        match &mut internal.state {
+            EngineState::Going(state) => {
+                if let EngineResultState::Communicated(x) = state.best_result {
+                    if x == result {
+                        return;
+                    }
+                }
+                state.best_result = EngineResultState::Ready(result);
+            }
+            _ => {}
+        }
+    }
+
+    async fn should_send_bestmove(&self) -> Option<EngineResult> {
+        let mut internal = self.internals.lock().await;
+        match &mut internal.state {
+            EngineState::Going(state) => match state.best_result {
+                EngineResultState::Ready(x) => {
+                    state.best_result = EngineResultState::Communicated(x.clone());
+                    return Some(x);
+                }
+                _ => return None,
+            },
+            _ => None,
+        }
+    }
+
     pub async fn main_task_engine(self: &Arc<Self>) {
         loop {
-            let state = self.internals.lock().await.state;
-            if state != EngineState::Stopped {
+            let state = self.internals.lock().await.state.clone();
+            if !state.is_stopped() {
                 let calc = self.calculate();
                 let mut messages_recv = self.messages_recv.lock().await;
                 let msg = messages_recv.recv();
                 select! {
                     calc = calc => {
-                        self.internals.lock().await.result = EngineResultState::Ready(calc);
-                        self.maybe_send_bestmove().await;
-                        self.internals.lock().await.state = EngineState::Stopped;
+                        self.record_bestmove(calc).await;
+                        if let Some(mv) = self.should_send_bestmove().await {
+                            self.send_bestmove(mv);
+                        }
                     },
                     msg = msg => {
                         self.handle_message(msg.unwrap()).await;
@@ -224,22 +283,15 @@ impl Engine {
                 self.send_uci_message(UciMessage::ReadyOk);
             }
             //UciMessage::Register { later, name, code } => todo!(),
-            UciMessage::Position {
-                startpos,
-                fen,
-                moves,
-            } => {}
-            UciMessage::SetOption { name, value } => todo!(),
+            UciMessage::Position { .. } => {}
+            UciMessage::SetOption { .. } => todo!(),
             UciMessage::UciNewGame => {}
             UciMessage::Stop => {}
             UciMessage::PonderHit => {}
             UciMessage::Quit => {
                 self.main_task.lock().await.take().unwrap().abort();
             }
-            UciMessage::Go {
-                time_control,
-                search_control,
-            } => {}
+            UciMessage::Go { .. } => {}
             //UciMessage::Id { name, author } => todo!(),
             //UciMessage::UciOk => todo!(),
             //UciMessage::ReadyOk => todo!(),
