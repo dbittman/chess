@@ -12,6 +12,8 @@ use tokio::{
 };
 use vampirc_uci::{UciFen, UciMessage, UciMove, UciSearchControl, UciTimeControl};
 
+use crate::ab::SearchSettings;
+
 use super::board::Board;
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -19,6 +21,7 @@ struct EngineResult {
     best_move: Option<UciMove>,
     ponder: Option<UciMove>,
     stats: Stats,
+    out_of_time: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -122,6 +125,7 @@ impl EngineInternals {
         for mv in self.board.legal_moves() {
             return EngineResult {
                 best_move: Some(mv.into()),
+                out_of_time: true,
                 ..Default::default()
             };
         }
@@ -130,7 +134,9 @@ impl EngineInternals {
             ponder: None,
             stats: Stats {
                 confidence: f32::INFINITY,
+                depth: 0,
             },
+            out_of_time: true,
         }
     }
 }
@@ -142,7 +148,10 @@ struct EngineTimes {
 
 impl Engine {
     async fn get_times(self: &Arc<Self>, state: &ThinkState) -> EngineTimes {
-        todo!()
+        EngineTimes {
+            min: Duration::from_millis(500),
+            max: Duration::from_secs(1),
+        }
     }
 
     async fn find_moves(self: &Arc<Self>, state: ThinkState, past_min_time: bool) -> EngineResult {
@@ -151,9 +160,27 @@ impl Engine {
             EngineResultState::Ready(last) => last.stats.depth + 2,
             EngineResultState::Communicated(_) => panic!("Engine is not in a state to calculate"),
         };
-        todo!()
+        eprintln!("find_moves {} {}", past_min_time, depth);
+        let board = self.internals.lock().await.board.clone();
+        let settings = SearchSettings {
+            depth,
+            divide: false,
+            ab_prune: true,
+        };
+        let res = { tokio::task::spawn_blocking(move || board.alphabeta(&settings, true)) }
+            .await
+            .unwrap();
+        EngineResult {
+            best_move: res.data.map(|x| x.mv.into()),
+            stats: Stats {
+                confidence: -0.1,
+                depth,
+            },
+            ..Default::default()
+        }
     }
 
+    #[async_recursion::async_recursion]
     async fn calculate(self: &Arc<Self>) -> EngineResult {
         let last_state = match &self.internals.lock().await.state {
             EngineState::Going(state) => state.clone(),
@@ -167,7 +194,18 @@ impl Engine {
         let elapsed = last_state.start_time.elapsed();
         let past_min_time = elapsed >= times.min;
         let past_max_time = elapsed >= times.max;
+        let remaining = match (times.max - elapsed).checked_div(2) {
+            Some(x) => x,
+            None => return self.calculate().await,
+        };
 
+        eprintln!(
+            "calculate {} {} {} {}",
+            past_min_time,
+            past_max_time,
+            elapsed.as_millis(),
+            remaining.as_millis()
+        );
         if past_max_time {
             match last_state.best_result {
                 EngineResultState::Ready(result) => {
@@ -181,8 +219,10 @@ impl Engine {
                 }
             }
         }
-
-        self.find_moves(last_state, past_min_time).await
+        match tokio::time::timeout(remaining, self.find_moves(last_state, past_min_time)).await {
+            Ok(result) => result,
+            Err(_) => self.calculate().await,
+        }
     }
 
     fn send_bestmove(self: &Arc<Self>, mv: EngineResult) {
@@ -256,6 +296,9 @@ impl Engine {
         match &mut internal.state {
             EngineState::Going(state) => match state.best_result {
                 EngineResultState::Ready(x) => {
+                    if !x.out_of_time && x.stats.confidence < 0.0 {
+                        return None;
+                    }
                     state.best_result = EngineResultState::Communicated(x.clone());
                     return Some(x);
                 }

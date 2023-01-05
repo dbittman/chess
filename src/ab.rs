@@ -1,11 +1,21 @@
 pub trait AlphaBeta {
-    type ItemIterator<'a>: Iterator<Item = Self> + 'a
+    type ItemIterator<'a>: Iterator<Item = (Self, Self::Data)> + 'a
     where
-        Self: 'a;
+        Self: Sized + 'a;
+
+    type Data;
 
     fn is_terminal(&self) -> bool;
     fn score(&self) -> f32;
-    fn children(&self) -> Self::ItemIterator<'_>;
+    fn children(&self) -> Self::ItemIterator<'_>
+    where
+        Self: Sized;
+}
+
+pub struct AlphaBetaResult<D> {
+    pub count: u64,
+    pub value: f32,
+    pub data: Option<D>,
 }
 
 pub struct SearchSettings {
@@ -31,13 +41,21 @@ pub fn alphabeta<T: AlphaBeta>(
     mut alpha: f32,
     mut beta: f32,
     max: bool,
-) -> (u64, f32) {
+) -> AlphaBetaResult<T::Data> {
     if depth == 0 || node.is_terminal() {
-        return (1, node.score());
+        return AlphaBetaResult {
+            count: 1,
+            value: node.score(),
+            data: None,
+        };
     }
 
     if depth == 1 && settings.divide {
-        return (node.children().count().try_into().unwrap(), 0.0);
+        return AlphaBetaResult {
+            count: node.children().count().try_into().unwrap(),
+            value: 0.0,
+            data: None,
+        };
     }
 
     let mut value = if max {
@@ -46,27 +64,44 @@ pub fn alphabeta<T: AlphaBeta>(
         f32::INFINITY
     };
     let mut count = 0;
-    for ch in node.children() {
+    let mut best = None;
+
+    for (ch, data) in node.children() {
         count += if max {
-            let (c, chv) = alphabeta(&ch, settings, depth - 1, alpha, beta, false);
-            value = f32::max(value, chv);
+            let res = alphabeta(&ch, settings, depth - 1, alpha, beta, false);
+            if res.value > value {
+                value = res.value;
+                best = Some(data);
+            }
             alpha = f32::max(alpha, value);
             if value >= beta && settings.ab_prune {
                 break;
             }
-            c
+            res.count
         } else {
-            let (c, chv) = alphabeta(&ch, settings, depth - 1, alpha, beta, true);
-            value = f32::min(value, chv);
+            let res = alphabeta(&ch, settings, depth - 1, alpha, beta, true);
+            if res.value < value {
+                value = res.value;
+                best = Some(data);
+            }
             beta = f32::min(alpha, value);
             if value <= alpha && settings.ab_prune {
                 break;
             }
-            c
+            res.count
         };
     }
     if count == 0 {
-        return (0, node.score());
+        return AlphaBetaResult {
+            count: 0,
+            value: node.score(),
+            data: None,
+        };
     }
-    (count, value)
+
+    AlphaBetaResult {
+        count: count,
+        value: value,
+        data: best,
+    }
 }

@@ -3,7 +3,7 @@ use std::fmt::Display;
 use colored::Colorize;
 use fen::{BoardState, FenError};
 
-use crate::ab::{AlphaBeta, SearchSettings};
+use crate::ab::{AlphaBeta, AlphaBetaResult, SearchSettings};
 
 use super::{
     bitboard::BitBoard,
@@ -342,10 +342,17 @@ impl AlphaBeta for Board {
     }
 
     fn children(&self) -> Self::ItemIterator<'_> {
-        self.legal_moves().map(|m| apply(self, m))
+        self.legal_moves()
+            .map(|m| (apply(self, m), MoveData { mv: m }))
     }
 
-    type ItemIterator<'a> = impl Iterator<Item = Board> + 'a;
+    type ItemIterator<'a> = impl Iterator<Item = (Board, Self::Data)> + 'a;
+
+    type Data = MoveData;
+}
+
+pub struct MoveData {
+    pub mv: Move,
 }
 
 fn apply(b: &Board, m: Move) -> Board {
@@ -353,7 +360,7 @@ fn apply(b: &Board, m: Move) -> Board {
 }
 
 impl Board {
-    pub fn alphabeta(&self, settings: &SearchSettings, max: bool) -> (u64, f32) {
+    pub fn alphabeta(&self, settings: &SearchSettings, max: bool) -> AlphaBetaResult<MoveData> {
         crate::ab::alphabeta(
             self,
             settings,

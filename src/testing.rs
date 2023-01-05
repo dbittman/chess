@@ -170,10 +170,10 @@ mod test {
         let board =
             Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         b.iter(|| {
-            let (_, _) = board.alphabeta(&settings, true);
+            let res = board.alphabeta(&settings, true);
         });
-        let (c, _) = board.alphabeta(&settings, true);
-        eprintln!("total: {}", c);
+        let res = board.alphabeta(&settings, true);
+        eprintln!("total: {}", res.count);
     }
 
     const MAX_DEPTH: u32 = 5;
@@ -270,18 +270,18 @@ fn test_with_epd(mon: &Arc<Monitor>, scope: &Scope, epd: &str, max: u32) {
             let mon = mon.clone();
             scope.execute(move || {
                 let settings = SearchSettings::divide(depth.into());
-                let (count, _) = board.alphabeta(&settings, true);
-                eprintln!("{fen} depth {depth} expected {nodes} got {count}");
-                if count != nodes {
+                let res = board.alphabeta(&settings, true);
+                eprintln!("{fen} depth {depth} expected {nodes} got {}", res.count);
+                if res.count != nodes {
                     eprintln!("fail, here is some info:");
                     eprintln!("{board}");
                     for m in board.legal_moves() {
                         let board = board.clone().apply_move(&m).unwrap();
-                        let (ncount, _) = board.alphabeta(&settings, true);
-                        eprintln!("{m} count: {ncount}");
+                        let nres = board.alphabeta(&settings, true);
+                        eprintln!("{m} count: {}", nres.count);
                     }
                 }
-                assert_eq!(count, nodes);
+                assert_eq!(res.count, nodes);
                 mon.done();
             });
         }
