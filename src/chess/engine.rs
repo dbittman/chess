@@ -154,7 +154,7 @@ impl Engine {
         }
     }
 
-    async fn find_moves(self: &Arc<Self>, state: ThinkState, past_min_time: bool) -> EngineResult {
+    async fn find_moves(self: &Arc<Self>, state: &ThinkState, past_min_time: bool) -> EngineResult {
         let depth = match state.best_result {
             EngineResultState::Calculating => 1,
             EngineResultState::Ready(last) => last.stats.depth + 2,
@@ -177,6 +177,14 @@ impl Engine {
                 depth,
             },
             ..Default::default()
+        }
+    }
+
+    async fn get_last_result(self: &Arc<Self>, state: &ThinkState) -> EngineResult {
+        match state.best_result {
+            EngineResultState::Calculating => self.internals.lock().await.get_move_immediately(),
+            EngineResultState::Ready(last) => last,
+            EngineResultState::Communicated(last) => last,
         }
     }
 
@@ -207,21 +215,15 @@ impl Engine {
             remaining.as_millis()
         );
         if past_max_time {
-            match last_state.best_result {
-                EngineResultState::Ready(result) => {
-                    return result;
-                }
-                EngineResultState::Calculating => {
-                    return self.internals.lock().await.get_move_immediately();
-                }
-                EngineResultState::Communicated(result) => {
-                    return result;
-                }
-            }
+            return self.get_last_result(&last_state).await;
         }
-        match tokio::time::timeout(remaining, self.find_moves(last_state, past_min_time)).await {
+        match tokio::time::timeout(remaining, self.find_moves(&last_state, past_min_time)).await {
             Ok(result) => result,
-            Err(_) => self.calculate().await,
+            Err(_) => {
+                let mut result = self.get_last_result(&last_state).await;
+                result.out_of_time = true;
+                result
+            }
         }
     }
 
@@ -312,12 +314,13 @@ impl Engine {
         loop {
             let state = self.internals.lock().await.state.clone();
             if !state.is_stopped() {
-                let calc = self.calculate();
+                let self2 = self.clone();
+                let calc = spawn(async move { self2.calculate().await });
                 let mut messages_recv = self.messages_recv.lock().await;
                 let msg = messages_recv.recv();
                 select! {
                     calc = calc => {
-                        self.record_bestmove(calc).await;
+                        self.record_bestmove(calc.unwrap()).await;
                         if let Some(mv) = self.should_send_bestmove().await {
                             self.send_bestmove(mv);
                             self.internals.lock().await.state = EngineState::Stopped;
@@ -366,7 +369,7 @@ impl Engine {
     }
 
     pub async fn handle_uci_message(self: &Arc<Self>, uci: UciMessage) {
-        //eprintln!("uci message: {}", uci.to_string());
+        eprintln!("uci message: {}", uci.to_string());
         if !self.is_init().await {
             if uci != UciMessage::Uci {
                 eprintln!("UCI message while not in UCI mode {}", uci.to_string());
