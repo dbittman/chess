@@ -236,8 +236,8 @@ impl Display for Move {
     }
 }
 
-impl From<UciMove> for Move {
-    fn from(value: UciMove) -> Self {
+impl From<&UciMove> for Move {
+    fn from(value: &UciMove) -> Self {
         Self {
             start: Square::from_rank_and_file(
                 value.from.rank.try_into().unwrap(),

@@ -40,6 +40,14 @@ impl EngineState {
     fn is_stopped(&self) -> bool {
         matches!(self, Self::Stopped)
     }
+
+    /// Returns `true` if the engine state is [`Pondering`].
+    ///
+    /// [`Pondering`]: EngineState::Pondering
+    #[must_use]
+    fn is_pondering(&self) -> bool {
+        matches!(self, Self::Pondering(..))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +72,10 @@ impl ThinkState {
             search_control,
             best_result: EngineResultState::Calculating,
         }
+    }
+
+    fn adj_controls_for_ponder(&mut self) {
+        todo!()
     }
 }
 
@@ -117,7 +129,7 @@ impl EngineInternals {
         };
         self.board = Board::from_fen(fen.as_str()).unwrap();
         for mv in moves {
-            self.board = self.board.clone().apply_move(&(*mv).into()).unwrap();
+            self.board = self.board.clone().apply_move(&mv.into()).unwrap();
         }
     }
 
@@ -146,11 +158,53 @@ struct EngineTimes {
     max: Duration,
 }
 
+impl EngineTimes {
+    fn inf() -> Self {
+        Self {
+            min: Duration::from_secs(0),
+            max: Duration::from_secs(100000000),
+        }
+    }
+}
+
+fn calc_time_left(
+    white_time: Option<Duration>,
+    black_time: Option<Duration>,
+    white_increment: Option<Duration>,
+    black_increment: Option<Duration>,
+    moves_to_go: Option<u8>,
+) -> EngineTimes {
+    todo!()
+}
+
 impl Engine {
     async fn get_times(self: &Arc<Self>, state: &ThinkState) -> EngineTimes {
-        EngineTimes {
-            min: Duration::from_millis(500),
-            max: Duration::from_secs(1),
+        match &state.time_control {
+            Some(tc) => match tc {
+                UciTimeControl::Ponder => EngineTimes::inf(),
+                UciTimeControl::Infinite => EngineTimes::inf(),
+                UciTimeControl::TimeLeft {
+                    white_time,
+                    black_time,
+                    white_increment,
+                    black_increment,
+                    moves_to_go,
+                } => calc_time_left(
+                    white_time.map(|x| x.to_std().unwrap_or_default()),
+                    black_time.map(|x| x.to_std().unwrap_or_default()),
+                    white_increment.map(|x| x.to_std().unwrap_or_default()),
+                    black_increment.map(|x| x.to_std().unwrap_or_default()),
+                    *moves_to_go,
+                ),
+                UciTimeControl::MoveTime(x) => EngineTimes {
+                    min: x.to_std().unwrap_or_default(),
+                    max: x.to_std().unwrap_or_default(),
+                },
+            },
+            None => EngineTimes {
+                min: Duration::from_millis(5000),
+                max: Duration::from_secs(10),
+            },
         }
     }
 
@@ -202,9 +256,26 @@ impl Engine {
         let elapsed = last_state.start_time.elapsed();
         let past_min_time = elapsed >= times.min;
         let past_max_time = elapsed >= times.max;
-        let remaining = match (times.max - elapsed).checked_div(2) {
-            Some(x) => x,
-            None => return self.calculate().await,
+        let is_pondering = self.internals.lock().await.state.is_pondering()
+            || last_state
+                .time_control
+                .as_ref()
+                .map(|tc| matches!(tc, UciTimeControl::Ponder))
+                .unwrap_or_default();
+
+        let is_infinite = last_state
+            .time_control
+            .as_ref()
+            .map(|tc| matches!(tc, UciTimeControl::Infinite))
+            .unwrap_or_default();
+
+        let remaining = if is_pondering || is_infinite {
+            Duration::from_secs(100000000)
+        } else {
+            match (times.max - elapsed).checked_div(2) {
+                Some(x) => x,
+                None => return self.calculate().await,
+            }
         };
 
         eprintln!(
@@ -269,7 +340,13 @@ impl Engine {
                 internal.state = EngineState::Stopped;
             }
             UciMessage::PonderHit => {
-                self.internals.lock().await.state = EngineState::Going(ThinkState::new(None, None));
+                let mut internal = self.internals.lock().await;
+                match &internal.state {
+                    EngineState::Pondering(state) => {
+                        internal.state = EngineState::Going(state.clone());
+                    }
+                    _ => {}
+                }
             }
             UciMessage::UciNewGame => {
                 self.internals.lock().await.state = EngineState::Stopped;
@@ -323,7 +400,19 @@ impl Engine {
                         self.record_bestmove(calc.unwrap()).await;
                         if let Some(mv) = self.should_send_bestmove().await {
                             self.send_bestmove(mv);
-                            self.internals.lock().await.state = EngineState::Stopped;
+                            let mut internal = self.internals.lock().await;
+                            if let Some(ourmv) = mv.best_move && let Some(ponder) = mv.ponder && let EngineState::Going(mut state) = internal.state.clone() {
+                                let board = internal.board.clone();
+                                let ourmv: crate::chess::moves::Move = (&ourmv).into();
+                                let ponder: crate::chess::moves::Move = (&ponder).into();
+                                let board = board.apply_move(&ourmv).unwrap();
+                                let board = board.apply_move(&ponder).unwrap();
+                                internal.board = board;
+                                state.adj_controls_for_ponder();
+                                internal.state = EngineState::Pondering(state);
+                            } else {
+                                internal.state = EngineState::Stopped;
+                            }
                         }
                     },
                     msg = msg => {

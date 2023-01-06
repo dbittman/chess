@@ -1,6 +1,7 @@
 #![feature(step_trait)]
 #![feature(type_alias_impl_trait)]
 #![feature(test)]
+#![feature(let_chains)]
 
 use std::{io::stdin, sync::Arc};
 
