@@ -14,7 +14,7 @@ use vampirc_uci::{UciFen, UciMessage, UciMove, UciSearchControl, UciTimeControl}
 
 use crate::ab::SearchSettings;
 
-use super::board::Board;
+use super::{board::Board, side::Side};
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 struct EngineResult {
@@ -54,8 +54,10 @@ impl EngineState {
 struct ThinkState {
     start_time: Instant,
     time_control: Option<UciTimeControl>,
-    search_control: Option<UciSearchControl>,
+    // TODO
+    _search_control: Option<UciSearchControl>,
     best_result: EngineResultState,
+    our_side: Side,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -65,17 +67,38 @@ struct Stats {
 }
 
 impl ThinkState {
-    fn new(time_control: Option<UciTimeControl>, search_control: Option<UciSearchControl>) -> Self {
+    fn new(
+        time_control: Option<UciTimeControl>,
+        search_control: Option<UciSearchControl>,
+        our_side: Side,
+    ) -> Self {
         Self {
             start_time: Instant::now(),
             time_control,
-            search_control,
+            _search_control: search_control,
             best_result: EngineResultState::Calculating,
+            our_side,
         }
     }
 
     fn adj_controls_for_ponder(&mut self) {
-        todo!()
+        let time_since = self.start_time.elapsed();
+        if let Some(UciTimeControl::TimeLeft {
+            white_time,
+            black_time,
+            ..
+        }) = &mut self.time_control
+        {
+            let time = match self.our_side {
+                Side::White => white_time,
+                Side::Black => black_time,
+            };
+            if let Some(time) = time {
+                *time = time
+                    .checked_sub(&vampirc_uci::Duration::from_std(time_since).unwrap())
+                    .unwrap_or(vampirc_uci::Duration::milliseconds(100));
+            }
+        }
     }
 }
 
@@ -172,9 +195,26 @@ fn calc_time_left(
     black_time: Option<Duration>,
     white_increment: Option<Duration>,
     black_increment: Option<Duration>,
-    moves_to_go: Option<u8>,
+    _moves_to_go: Option<u8>,
+    our_side: Side,
 ) -> EngineTimes {
-    todo!()
+    eprintln!(
+        "calc_time_left({:?}, {:?}, {:?}, {:?}, {:?}, {:?})",
+        white_time, black_time, white_increment, black_increment, _moves_to_go, our_side
+    );
+    let (time, _inc) = match our_side {
+        Side::White => (white_time, white_increment),
+        Side::Black => (black_time, black_increment),
+    };
+    if let Some(time) = time {
+        return EngineTimes {
+            min: time / 20,
+            max: time / 10,
+        };
+    }
+    // TODO: take all the inputs into account
+    //todo!()
+    EngineTimes::inf()
 }
 
 impl Engine {
@@ -195,6 +235,7 @@ impl Engine {
                     white_increment.map(|x| x.to_std().unwrap_or_default()),
                     black_increment.map(|x| x.to_std().unwrap_or_default()),
                     *moves_to_go,
+                    state.our_side,
                 ),
                 UciTimeControl::MoveTime(x) => EngineTimes {
                     min: x.to_std().unwrap_or_default(),
@@ -322,8 +363,9 @@ impl Engine {
                 time_control,
                 search_control,
             } => {
+                let side = self.internals.lock().await.board.to_move();
                 self.internals.lock().await.state =
-                    EngineState::Going(ThinkState::new(time_control, search_control));
+                    EngineState::Going(ThinkState::new(time_control, search_control, side));
                 // TODO: put something, anything, into the engine result.
             }
             UciMessage::Stop => {
@@ -390,6 +432,7 @@ impl Engine {
     pub async fn main_task_engine(self: &Arc<Self>) {
         loop {
             let state = self.internals.lock().await.state.clone();
+            //eprintln!("top of loop: {:?}", state);
             if !state.is_stopped() {
                 let self2 = self.clone();
                 let calc = spawn(async move { self2.calculate().await });

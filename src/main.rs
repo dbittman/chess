@@ -6,7 +6,7 @@
 use std::{io::stdin, sync::Arc};
 
 use chess::{board::Board, engine::Engine};
-use vampirc_uci::UciMessage;
+
 
 use crate::ab::SearchSettings;
 
@@ -21,7 +21,7 @@ async fn main() {
         ab_prune: true,
     };
     let board = Board::from_fen("startpos").unwrap();
-    let x = tokio::task::spawn(async {
+    let _x = tokio::task::spawn(async {
         let res = { tokio::task::spawn_blocking(move || board.alphabeta(&settings, true)) }
             .await
             .unwrap();
