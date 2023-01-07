@@ -99,6 +99,7 @@ impl ThinkState {
                     .unwrap_or(vampirc_uci::Duration::milliseconds(100));
             }
         }
+        self.start_time = Instant::now();
     }
 }
 
@@ -262,15 +263,19 @@ impl Engine {
             divide: false,
             ab_prune: true,
         };
-        let res = { tokio::task::spawn_blocking(move || board.alphabeta(&settings, true)) }
+        let mut res = { tokio::task::spawn_blocking(move || board.alphabeta(&settings, true)) }
             .await
             .unwrap();
+        //eprintln!("got data: {:#?}", res.data);
+        let best = res.data.pop();
+        let response = res.data.pop();
         EngineResult {
-            best_move: res.data.map(|x| x.mv.into()),
+            best_move: best.map(|x| x.mv.into()),
             stats: Stats {
                 confidence: -0.1,
                 depth,
             },
+            ponder: response.map(|x| x.mv.into()),
             ..Default::default()
         }
     }
@@ -287,6 +292,7 @@ impl Engine {
     async fn calculate(self: &Arc<Self>) -> EngineResult {
         let last_state = match &self.internals.lock().await.state {
             EngineState::Going(state) => state.clone(),
+            EngineState::Pondering(state) => state.clone(),
             _ => {
                 panic!("Engine is not in a state to calculate")
             }
@@ -296,7 +302,6 @@ impl Engine {
 
         let elapsed = last_state.start_time.elapsed();
         let past_min_time = elapsed >= times.min;
-        let past_max_time = elapsed >= times.max;
         let is_pondering = self.internals.lock().await.state.is_pondering()
             || last_state
                 .time_control
@@ -309,6 +314,8 @@ impl Engine {
             .as_ref()
             .map(|tc| matches!(tc, UciTimeControl::Infinite))
             .unwrap_or_default();
+
+        let past_max_time = elapsed >= times.max && !is_pondering && !is_infinite;
 
         let remaining = if is_pondering || is_infinite {
             Duration::from_secs(100000000)
@@ -347,6 +354,7 @@ impl Engine {
     }
 
     async fn handle_message(self: &Arc<Self>, msg: UciMessage) {
+        eprintln!("got message: {:?}", msg);
         match msg {
             UciMessage::Position {
                 startpos,
@@ -408,6 +416,14 @@ impl Engine {
                 }
                 state.best_result = EngineResultState::Ready(result);
             }
+            EngineState::Pondering(state) => {
+                if let EngineResultState::Communicated(x) = state.best_result {
+                    if x == result {
+                        return;
+                    }
+                }
+                state.best_result = EngineResultState::Ready(result);
+            }
             _ => {}
         }
     }
@@ -452,6 +468,7 @@ impl Engine {
                                 let board = board.apply_move(&ponder).unwrap();
                                 internal.board = board;
                                 state.adj_controls_for_ponder();
+                                state.best_result = EngineResultState::Calculating;
                                 internal.state = EngineState::Pondering(state);
                             } else {
                                 internal.state = EngineState::Stopped;

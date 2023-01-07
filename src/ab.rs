@@ -3,7 +3,7 @@ pub trait AlphaBeta {
     where
         Self: Sized + 'a;
 
-    type Data;
+    type Data: Clone;
 
     fn is_terminal(&self) -> bool;
     fn score(&self) -> f32;
@@ -15,7 +15,7 @@ pub trait AlphaBeta {
 pub struct AlphaBetaResult<D> {
     pub count: u64,
     pub value: f32,
-    pub data: Option<D>,
+    pub data: Vec<D>,
 }
 
 pub struct SearchSettings {
@@ -46,7 +46,7 @@ pub fn alphabeta<T: AlphaBeta>(
         return AlphaBetaResult {
             count: 1,
             value: node.score(),
-            data: None,
+            data: vec![],
         };
     }
 
@@ -54,7 +54,7 @@ pub fn alphabeta<T: AlphaBeta>(
         return AlphaBetaResult {
             count: node.children().count().try_into().unwrap(),
             value: 0.0,
-            data: None,
+            data: vec![],
         };
     }
 
@@ -64,14 +64,15 @@ pub fn alphabeta<T: AlphaBeta>(
         f32::INFINITY
     };
     let mut count = 0;
-    let mut best = None;
+    let mut best = vec![];
 
     for (ch, data) in node.children() {
         count += if max {
             let res = alphabeta(&ch, settings, depth - 1, alpha, beta, false);
             if res.value > value {
                 value = res.value;
-                best = Some(data);
+                best = res.data.clone();
+                best.push(data);
             }
             alpha = f32::max(alpha, value);
             if value >= beta && settings.ab_prune {
@@ -82,7 +83,8 @@ pub fn alphabeta<T: AlphaBeta>(
             let res = alphabeta(&ch, settings, depth - 1, alpha, beta, true);
             if res.value < value {
                 value = res.value;
-                best = Some(data);
+                best = res.data.clone();
+                best.push(data);
             }
             beta = f32::min(alpha, value);
             if value <= alpha && settings.ab_prune {
@@ -95,7 +97,7 @@ pub fn alphabeta<T: AlphaBeta>(
         return AlphaBetaResult {
             count: 0,
             value: node.score(),
-            data: None,
+            data: vec![],
         };
     }
 

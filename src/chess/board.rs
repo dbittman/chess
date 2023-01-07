@@ -351,6 +351,7 @@ impl AlphaBeta for Board {
     type Data = MoveData;
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct MoveData {
     pub mv: Move,
 }
