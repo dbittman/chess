@@ -2,6 +2,7 @@ pub mod bitboard;
 pub mod board;
 pub mod direction;
 pub mod engine;
+pub mod eval;
 pub mod legal;
 pub mod moves;
 pub mod piece;

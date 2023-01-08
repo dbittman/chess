@@ -6,7 +6,7 @@
 use std::{io::stdin, sync::Arc};
 
 use chess::{board::Board, engine::Engine};
-
+use vampirc_uci::{parse_one, UciMessage, UciTimeControl};
 
 use crate::ab::SearchSettings;
 
@@ -31,9 +31,16 @@ async fn main() {
     .unwrap();
     let engine = Arc::new(Engine::default());
     for line in stdin().lines() {
-        engine
-            .handle_uci_message(vampirc_uci::parse_one(&line.unwrap()))
-            .await;
+        eprintln!("line: {:?}", line);
+        let msg = if line.as_ref().unwrap().starts_with("go ponder") {
+            UciMessage::Go {
+                time_control: Some(UciTimeControl::Ponder),
+                search_control: None,
+            }
+        } else {
+            parse_one(&line.unwrap())
+        };
+        engine.handle_uci_message(msg).await;
     }
     std::future::pending::<()>().await;
 }

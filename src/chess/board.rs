@@ -338,7 +338,7 @@ impl AlphaBeta for Board {
     }
 
     fn score(&self) -> f32 {
-        1.0
+        self.evaluate_position()
     }
 
     fn children(&self) -> Self::ItemIterator<'_> {

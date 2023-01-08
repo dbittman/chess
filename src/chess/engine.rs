@@ -269,12 +269,10 @@ impl Engine {
         //eprintln!("got data: {:#?}", res.data);
         let best = res.data.pop();
         let response = res.data.pop();
+        let confidence = (depth as f32) - 7.;
         EngineResult {
             best_move: best.map(|x| x.mv.into()),
-            stats: Stats {
-                confidence: -0.1,
-                depth,
-            },
+            stats: Stats { confidence, depth },
             ponder: response.map(|x| x.mv.into()),
             ..Default::default()
         }
@@ -372,14 +370,25 @@ impl Engine {
                 search_control,
             } => {
                 let side = self.internals.lock().await.board.to_move();
-                self.internals.lock().await.state =
-                    EngineState::Going(ThinkState::new(time_control, search_control, side));
+                if let Some(UciTimeControl::Ponder) = time_control.as_ref() {
+                    self.internals.lock().await.state =
+                        EngineState::Pondering(ThinkState::new(time_control, search_control, side));
+                } else {
+                    self.internals.lock().await.state =
+                        EngineState::Going(ThinkState::new(time_control, search_control, side));
+                }
                 // TODO: put something, anything, into the engine result.
             }
             UciMessage::Stop => {
                 let mut internal = self.internals.lock().await;
                 match &mut internal.state {
                     EngineState::Going(state) => match state.best_result {
+                        EngineResultState::Ready(res) => {
+                            self.send_bestmove(res);
+                        }
+                        _ => {}
+                    },
+                    EngineState::Pondering(state) => match state.best_result {
                         EngineResultState::Ready(res) => {
                             self.send_bestmove(res);
                         }
@@ -430,6 +439,7 @@ impl Engine {
 
     async fn should_send_bestmove(&self) -> Option<EngineResult> {
         let mut internal = self.internals.lock().await;
+        eprintln!("should_send_bestmove: {:?}", internal.state);
         match &mut internal.state {
             EngineState::Going(state) => match state.best_result {
                 EngineResultState::Ready(x) => {
@@ -460,7 +470,7 @@ impl Engine {
                         if let Some(mv) = self.should_send_bestmove().await {
                             self.send_bestmove(mv);
                             let mut internal = self.internals.lock().await;
-                            if let Some(ourmv) = mv.best_move && let Some(ponder) = mv.ponder && let EngineState::Going(mut state) = internal.state.clone() {
+                            if let Some(ourmv) = mv.best_move && let Some(ponder) = mv.ponder && let EngineState::Going(mut state) = internal.state.clone() && false {
                                 let board = internal.board.clone();
                                 let ourmv: crate::chess::moves::Move = (&ourmv).into();
                                 let ponder: crate::chess::moves::Move = (&ponder).into();
@@ -535,7 +545,7 @@ impl Engine {
             }
             //UciMessage::Register { later, name, code } => todo!(),
             UciMessage::Position { .. } => {}
-            UciMessage::SetOption { .. } => todo!(),
+            UciMessage::SetOption { .. } => {}
             UciMessage::UciNewGame => {}
             UciMessage::Stop => {}
             UciMessage::PonderHit => {}
